@@ -1,76 +1,157 @@
+"""
+Text RAG Tool
+=============
+MCP tool for performing text search, scraping content,
+and using knowledge to refine prompts and optimize image queries.
+"""
+
 import os
-import yaml
-import argparse
+import sys
+
+# Add parent directory to path for standalone execution
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import json
-import requests
-from typing import List, Dict, Any
 from pathlib import Path
+from typing import List, Dict, Any
+
+import requests
 from bs4 import BeautifulSoup
 from mcp.server.fastmcp import FastMCP
 from openai import OpenAI
 
-with open(f"./config.yaml", "r", encoding="utf-8") as file:
-    config = yaml.safe_load(file)
+# Import shared utilities
+from tools.base import (
+    parse_json_response,
+    load_config,
+    load_prompt,
+    setup_proxy_from_config,
+    setup_stdio_encoding,
+    _log_info,
+    _log_error,
+)
 
-if config.get("proxy_on", False):
-    os.environ["http_proxy"] = config.get("HTTP_PROXY", "http://127.0.0.1:7890")
-    os.environ["https_proxy"] = config.get("HTTPS_PROXY", "http://127.0.0.1:7890")
+# ==============================================================================
+# Configuration
+# ==============================================================================
 
-with open(f"./prompts/knowledge_reasoning.yaml", "r", encoding="utf-8") as file:
-    SYSTEM_PROMPT = yaml.safe_load(file).get("system_prompt")
+setup_stdio_encoding()
+config = load_config("./config.yaml")
+setup_proxy_from_config(config)
 
-# 3. 路径与客户端初始化
-TEMP_DIR = Path(config.get("temp_dir", "./temp").get("text_rag", "./temp/text_rag")).absolute()
+SYSTEM_PROMPT = load_prompt("text_rag_injection")
+
+# Get temp directory - use session-specific if available
+session_dir = os.environ.get("MINDBRUSH_SESSION_DIR")
+if session_dir:
+    TEMP_DIR = Path(session_dir) / "temp" / "text_rag"
+else:
+    temp_dir_config = config.get("temp_dir", {})
+    if isinstance(temp_dir_config, dict):
+        TEMP_DIR = Path(temp_dir_config.get("text_rag", "./temp/text_rag")).absolute()
+    else:
+        TEMP_DIR = Path("./temp/text_rag").absolute()
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
-SERPER_API_KEY = config.get("SERPER_API_KEY", "bdf9b167a18e2e9071e4eed39f257aa28d8ad10c")
 
+# Serper API configuration
+SERPER_API_KEY = config.get("SERPER_API_KEY", "")
+
+# Initialize MCP server
 mcp = FastMCP("Knowledge Enhanced Search")
 
-# ================= 模块 1: 文本搜索与爬取 (原 Text_RAG Logic) =================
+
+# ==============================================================================
+# Text Search Functions
+# ==============================================================================
 
 def fetch_serper_text_urls(query: str, num_results: int = 3) -> List[Dict[str, str]]:
-    """获取搜索结果 URL"""
+    """
+    Fetch search result URLs using Serper API.
+    
+    Args:
+        query: Search query string
+        num_results: Number of results to retrieve
+        
+    Returns:
+        List of dicts with 'title' and 'link' keys
+    """
     url = "https://google.serper.dev/search"
-    payload = json.dumps({"q": query, "num": max(num_results, 5)}) # 多抓一点备用
-    headers = {'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json'}
+    payload = json.dumps({"q": query, "num": max(num_results, 5)})
+    headers = {
+        "X-API-KEY": SERPER_API_KEY,
+        "Content-Type": "application/json"
+    }
 
     try:
         response = requests.post(url, headers=headers, data=payload, timeout=10)
         response.raise_for_status()
         data = response.json()
+        
         items = data.get("organic", [])
-        return [{"title": item.get("title", ""), "link": item.get("link", "")} for item in items[:num_results]]
+        return [
+            {"title": item.get("title", ""), "link": item.get("link", "")}
+            for item in items[:num_results]
+        ]
+        
     except Exception as e:
-        print(f"Error fetching Serper results: {e}")
+        _log_error(f"Error fetching Serper results: {e}")
         return []
 
-def scrape_webpage_content(url: str) -> str:
-    """爬取并清洗网页正文"""
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
+
+def scrape_webpage_content(url: str, max_length: int = 3000) -> str:
+    """
+    Scrape and clean webpage content.
+    
+    Args:
+        url: Webpage URL to scrape
+        max_length: Maximum content length to return
+        
+    Returns:
+        Cleaned text content
+    """
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+    
     try:
         response = requests.get(url, headers=headers, timeout=8)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
         
-        for script in soup(["script", "style", "nav", "footer", "header", "iframe", "noscript", "svg", "button"]):
-            script.extract()
-            
+        # Remove non-content elements
+        for element in soup(["script", "style", "nav", "footer", "header", 
+                            "iframe", "noscript", "svg", "button"]):
+            element.extract()
+        
+        # Extract and clean text
         text = soup.get_text()
         lines = (line.strip() for line in text.splitlines())
         chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-        clean_text = '\n'.join(chunk for chunk in chunks if chunk)
+        clean_text = "\n".join(chunk for chunk in chunks if chunk)
         
-        # 截断以节省 Token
-        return clean_text[:3000] + "..." if len(clean_text) > 3000 else clean_text
+        # Truncate to save tokens
+        if len(clean_text) > max_length:
+            return clean_text[:max_length] + "..."
+        return clean_text
+        
     except Exception as e:
         return f"[Error scraping content: {str(e)}]"
 
-def run_search_workflow(text_queries: List[str]) -> str:
-    """执行完整的搜索+爬取流程，返回合并后的文本报告"""
-    final_report = []
-    max_urls_per_query = 2 
 
-    print(f"🔍 [Integrated Tool] Executing Text Search for: {text_queries}")
+def run_search_workflow(text_queries: List[str]) -> str:
+    """
+    Execute complete search and scrape workflow.
+    
+    Args:
+        text_queries: List of search queries
+        
+    Returns:
+        Merged text report from all searches
+    """
+    final_report = []
+    max_urls_per_query = 2
+
+    _log_info(f"Executing Text Search for: {text_queries}")
 
     for query in text_queries:
         search_results = fetch_serper_text_urls(query, num_results=max_urls_per_query)
@@ -80,25 +161,48 @@ def run_search_workflow(text_queries: List[str]) -> str:
             query_section += "No results found.\n"
         else:
             for idx, res in enumerate(search_results, 1):
-                url = res['link']
+                url = res["link"]
                 content = scrape_webpage_content(url)
-                query_section += f"\n--- Result {idx}: {res['title']} ---\nSource: {url}\nContent:\n{content}\n" + "-"*20 + "\n"
+                query_section += f"\n--- Result {idx}: {res['title']} ---\n"
+                query_section += f"Source: {url}\n"
+                query_section += f"Content:\n{content}\n"
+                query_section += "-" * 20 + "\n"
         
         final_report.append(query_section)
 
     full_knowledge = "\n".join(final_report)
     
-    # 保存原始搜索日志 (可选，方便调试)
+    # Save raw log for debugging
     try:
-        with open(TEMP_DIR / "search_raw_log.txt", "w", encoding="utf-8") as f:
+        log_file = TEMP_DIR / "search_raw_log.txt"
+        with open(log_file, "w", encoding="utf-8") as f:
             f.write(full_knowledge)
-    except: pass
+    except Exception:
+        pass
     
     return full_knowledge
 
-def run_injection_logic(user_intent: str, retrieved_knowledge: str, image_queries: List[str]) -> Dict[str, Any]:
-    """调用 LLM 进行知识注入"""
-    client = OpenAI(base_url=config.get("OPENAI_BASE_URL", "https://yunwu.ai/v1"), api_key=config.get("OPENAI_API_KEY", "sk-X9jXfVLVKHEK6y06p6MRJuEHwvqQX240PPrebQikc1fBXeIS"))
+
+def run_injection_logic(
+    user_intent: str,
+    retrieved_knowledge: str,
+    image_queries: List[str]
+) -> Dict[str, Any]:
+    """
+    Use LLM to inject knowledge into prompt.
+    
+    Args:
+        user_intent: Original user request
+        retrieved_knowledge: Scraped knowledge text
+        image_queries: Draft image queries
+        
+    Returns:
+        Dict with refined prompt and final image queries
+    """
+    client = OpenAI(
+        base_url=config.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+        api_key=config.get("OPENAI_API_KEY", ""),
+    )
     
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -106,79 +210,87 @@ def run_injection_logic(user_intent: str, retrieved_knowledge: str, image_querie
             Original Prompt: {user_intent}
             Retrieved Knowledge: {retrieved_knowledge}
             Image Queries: {json.dumps(image_queries)}
-            """}
+        """}
     ]
     
     try:
         response = client.chat.completions.create(
-            model=config.get("OPENAI_MODEL_NAME", "gpt-5.1"),
+            model=config.get("OPENAI_MODEL_NAME", "gpt-4"),
             messages=messages,
-            temperature=0.0
+            temperature=0.0,
         )
-        content = response.choices[0].message.content.strip()
         
-        # 清理 Markdown
-        if content.startswith("```json"):
-            content = content[7:-3]
-        elif content.startswith("```"):
-            content = content[3:-3]
-            
-        return json.loads(content)
+        content = response.choices[0].message.content.strip()
+        return parse_json_response(content)
+        
     except Exception as e:
-        print(f"❌ Injection Failed: {e}")
-        # Fallback: 发生错误时返回原始值
+        _log_error(f"Injection Failed: {e}")
         return {
             "prompt": user_intent,
             "final_image_queries": image_queries,
             "error": str(e)
         }
 
-# ================= MCP Tool 定义 (合并入口) =================
 
-@mcp.tool(description="Performs text search, scrapes content, and immediately uses that knowledge to refine the prompt and optimize image queries.")
+# ==============================================================================
+# MCP Tool Definition
+# ==============================================================================
+
+@mcp.tool(description="Performs text search, scrapes content, and uses knowledge to refine prompt and image queries.")
 def text_search_and_knowledge_injection(
-    text_queries: List[str], 
-    user_intent: str, 
+    text_queries: List[str],
+    user_intent: str,
     image_queries: List[str] = []
 ) -> str:
     """
-    Integration Tool: Text Search -> Knowledge Injection.
+    Integration tool: Text Search -> Knowledge Injection.
     
     Args:
         text_queries: List of keywords for Google Search.
         user_intent: The user's original request.
-        image_queries: The draft image queries identified by Intent Analysis.
+        image_queries: Draft image queries from Intent Analysis.
         
     Returns:
-        JSON String containing:
-        {
-            "prompt": "Refined prompt with facts",
-            "final_image_queries": ["Optimized list"]
-        }
+        JSON string containing:
+            - prompt: Refined prompt with facts
+            - final_image_queries: Optimized list
     """
-    
-    # 1. 执行搜索与爬取 (The "Eyes")
+    # Execute search and scrape
     if text_queries:
         retrieved_knowledge = run_search_workflow(text_queries)
     else:
-        retrieved_knowledge = "No text queries provided. Proceeding with optimization only."
+        # No queries, return original intent
         return json.dumps({
             "prompt": user_intent,
             "final_image_queries": image_queries,
         }, ensure_ascii=False)
 
-    # 2. 执行思考与重写 (The "Brain")
+    # Execute LLM injection
     result_json = run_injection_logic(user_intent, retrieved_knowledge, image_queries)
     
-    # 3. 返回 JSON 字符串 (供 Client 直接解析)
     return json.dumps(result_json, ensure_ascii=False)
+
+
+# ==============================================================================
+# Entry Point
+# ==============================================================================
 
 if __name__ == "__main__":
     mcp.run()
-    # Debug:
-    # res = text_search_and_knowledge_injection(
-    #     text_queries=["2025 NBA Finals teams", "2025 NBA Finals Game 7 score"], 
-    #     user_intent="Scoreboard of 2025 NBA Finals Game 7", 
-    #     image_queries=["NBA Finals Scoreboard design"]
+
+    # ==============================================================================
+    # Test Cases (Uncomment to test locally)
+    # ==============================================================================
+    # text_queries = [
+    #     "Tower Bridge London architecture history",
+    #     "Tower Bridge at night illumination"
+    # ]
+    # user_intent = "Generate a view of the Tower Bridge at coordinates 51.5055° N, 0.0754° W."
+    # image_queries = ["Tower Bridge London night view", "Tower Bridge architectural details"]
+    # 
+    # result = text_search_and_knowledge_injection(
+    #     text_queries=text_queries,
+    #     user_intent=user_intent,
+    #     image_queries=image_queries
     # )
-    # print(res)
+    # print("RAG Result:", result)

@@ -1,0 +1,37 @@
+# Step Icons Configuration
+# ========================
+# Configure custom icons for each workflow step.
+# Icons can be emoji or paths to image files (relative to project root).
+
+step_icons:
+  # Intent Analysis - 思考、分析
+  "Intent Analysis": "🧠"
+  
+  # Keyword Generation - 关键词、搜索
+  "Keyword Generation": "🔑"
+  
+  # Text Search - 文本检索
+  "Text Search & Knowledge Injection": "📚"
+  
+  # Image Search - 图片搜索
+  "Image Search": "🖼️"
+  
+  # Knowledge Reasoning - 推理、智慧
+  "Knowledge Reasoning": "💡"
+  
+  # Knowledge Review - 审查、总结
+  "Knowledge Review": "✨"
+  
+  # Image Generation - 创作、生成
+  "Image Generation": "🎨"
+  
+  # Default icon for unknown steps
+  "default": "⚙️"
+
+# Status Icons (optional - can override default emoji)
+status_icons:
+  pending: "⏳"
+  running: "🔄"
+  completed: "✅"
+  failed: "❌"
+  skipped: "⏭️"

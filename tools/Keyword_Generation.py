@@ -1,23 +1,47 @@
+"""
+Keyword Generation Tool
+=======================
+MCP tool for converting identified information gaps and reasoning results
+into optimized search keywords for text and image retrieval.
+"""
+
 import os
-import yaml
-import argparse
+import sys
+
+# Add parent directory to path for standalone execution
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import json
-from typing import Dict, Any, List, Optional
+from typing import Dict, List
+
 from mcp.server.fastmcp import FastMCP
 from openai import OpenAI
 
-with open(f"./config.yaml", "r", encoding="utf-8") as file:
-    config = yaml.safe_load(file)
+# Import shared utilities
+from tools.base import (
+    parse_json_response,
+    load_config,
+    load_prompt,
+    setup_proxy_from_config,
+    setup_stdio_encoding,
+)
 
-if config.get("proxy_on", False):
-    os.environ["http_proxy"] = config.get("HTTP_PROXY", "http://127.0.0.1:7890")
-    os.environ["https_proxy"] = config.get("HTTPS_PROXY", "http://127.0.0.1:7890")
+# ==============================================================================
+# Configuration
+# ==============================================================================
 
-with open(f"./prompts/keyword_generation.yaml", "r", encoding="utf-8") as file:
-    SYSTEM_PROMPT = yaml.safe_load(file).get("system_prompt")
+setup_stdio_encoding()
+config = load_config("./config.yaml")
+setup_proxy_from_config(config)
+
+SYSTEM_PROMPT = load_prompt("keyword_generation")
 
 mcp = FastMCP("Keyword Generation")
 
+
+# ==============================================================================
+# MCP Tool Definition
+# ==============================================================================
 
 @mcp.tool(description="Convert identified information gaps and reasoning results into optimized search keywords.")
 def keyword_generation(
@@ -25,26 +49,32 @@ def keyword_generation(
     reasoning_knowledge: List[str] = []
 ) -> Dict[str, List[str]]:
     """
-    Args:
-        need_process_problem: A list of strings, where each string is a specific question or problem.
-        reasoning_knowledge: (Optional) A list containing prior reasoning results (Problem -> Answer).
-    """
+    Generate optimized search keywords from problems and reasoning results.
     
-    # 1. 快速检查：如果输入列表为空，直接返回空结果
+    Args:
+        need_process_problem: A list of strings, each a specific question or problem.
+        reasoning_knowledge: Optional list containing prior reasoning results.
+        
+    Returns:
+        Dict containing:
+            - text_queries: Keywords for text/web search
+            - image_queries: Keywords for image search
+    """
+    # Quick check: empty input returns empty results
     if not need_process_problem:
         return {
             "text_queries": [],
             "image_queries": []
         }
 
-    client = OpenAI(base_url=config.get("OPENAI_BASE_URL", "https://yunwu.ai/v1"), api_key=config.get("OPENAI_API_KEY", "sk-X9jXfVLVKHEK6y06p6MRJuEHwvqQX240PPrebQikc1fBXeIS"))
+    client = OpenAI(
+        base_url=config.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+        api_key=config.get("OPENAI_API_KEY", ""),
+    )
 
-    # 2. 构建符合新提示词逻辑的输入上下文
-    input_data = {
-        "need_process_problem": need_process_problem
-    }
+    # Build input payload
+    input_data = {"need_process_problem": need_process_problem}
     
-    # 如果有推理知识，也加入到输入中
     if reasoning_knowledge:
         input_data["reasoning_knowledge"] = reasoning_knowledge
 
@@ -57,31 +87,38 @@ def keyword_generation(
 
     try:
         response = client.chat.completions.create(
-            model=config.get("OPENAI_MODEL_NAME", "gpt-5.1"),
+            model=config.get("OPENAI_MODEL_NAME", "gpt-4"),
             messages=messages,
-            temperature=0.0 # 保持 0.0 以确保逻辑执行的确定性
+            temperature=0.0,
         )
-        content = response.choices[0].message.content.strip()
         
-        # 3. 清理 Markdown 格式
-        if content.startswith("```json"):
-            content = content[7:-3]
-        elif content.startswith("```"):
-            content = content[3:-3]
-            
-        return json.loads(content)
+        content = response.choices[0].message.content.strip()
+        return parse_json_response(content)
 
     except Exception as e:
-        # 4. Fallback 逻辑
-        print(f"Error in keyword generation: {e}")
+        # Fallback with error info
         return {
-            "text_queries": [], 
+            "text_queries": [],
             "image_queries": [],
             "error": str(e)
         }
 
+
+# ==============================================================================
+# Entry Point
+# ==============================================================================
+
 if __name__ == "__main__":
     mcp.run()
+    
+    # ==============================================================================
+    # Test Cases (Uncomment to test locally)
+    # ==============================================================================
     # user_request = "Generate an image of Rumi, Mira, and Zoey, members of HUNTR/X from 'Kpop Demon Hunters', performing while standing on the moon."
-    # need_process_problem = ["Who are the characters Rumi, Mira, and Zoey from 'Kpop Demon Hunters' and what are their canonical visual appearances?", "What is the official or widely accepted visual design and style of the group HUNTR/X in 'Kpop Demon Hunters'?", "Are there any copyright or usage restrictions associated with generating images of characters from 'Kpop Demon Hunters'?", 'What does the surface and background of the moon look like in a realistic depiction for use as the performance stage?']
+    # need_process_problem = [
+    #     "Who are the characters Rumi, Mira, and Zoey from 'Kpop Demon Hunters' and what are their canonical visual appearances?",
+    #     "What is the official or widely accepted visual design and style of the group HUNTR/X in 'Kpop Demon Hunters'?",
+    #     "Are there any copyright or usage restrictions associated with generating images of characters from 'Kpop Demon Hunters'?",
+    #     "What does the surface and background of the moon look like in a realistic depiction for use as the performance stage?"
+    # ]
     # print(keyword_generation(need_process_problem=need_process_problem))

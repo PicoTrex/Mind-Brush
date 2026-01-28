@@ -1,55 +1,49 @@
+"""
+Knowledge Reasoning Tool
+========================
+MCP tool for performing deep reasoning or knowledge synthesis
+to answer specific problems identified during intent analysis.
+"""
+
 import os
-import yaml
-import argparse
-import base64
+import sys
+
+# Add parent directory to path for standalone execution
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import json
 from typing import Dict, Any, Optional, List
+
 from mcp.server.fastmcp import FastMCP
 from openai import OpenAI
-import mimetypes
 
-with open(f"./config.yaml", "r", encoding="utf-8") as file:
-    config = yaml.safe_load(file)
+# Import shared utilities
+from tools.base import (
+    encode_image,
+    parse_json_response,
+    load_config,
+    load_prompt,
+    setup_proxy_from_config,
+    setup_stdio_encoding,
+    _log_info,
+)
 
-if config.get("proxy_on", False):
-    os.environ["http_proxy"] = config.get("HTTP_PROXY", "http://127.0.0.1:7890")
-    os.environ["https_proxy"] = config.get("HTTPS_PROXY", "http://127.0.0.1:7890")
+# ==============================================================================
+# Configuration
+# ==============================================================================
 
-with open(f"./prompts/knowledge_reasoning.yaml", "r", encoding="utf-8") as file:
-    SYSTEM_PROMPT = yaml.safe_load(file).get("system_prompt")
+setup_stdio_encoding()
+config = load_config("./config.yaml")
+setup_proxy_from_config(config)
+
+SYSTEM_PROMPT = load_prompt("knowledge_reasoning")
 
 mcp = FastMCP("Knowledge Reasoning Engine")
 
-def encode_image(image_path: str):
-    if not image_path or not os.path.exists(image_path):
-        return None
-    
-    # --- 修改开始: 增强格式识别 ---
-    file_ext = os.path.splitext(image_path)[1].lower()
-    
-    # 优先根据后缀判断，确保 webp/png/gif 被正确识别
-    known_mimes = {
-        '.webp': 'image/webp',
-        '.png': 'image/png',
-        '.jpg': 'image/jpeg',
-        '.jpeg': 'image/jpeg',
-        '.gif': 'image/gif',
-        '.bmp': 'image/bmp',
-        '.tiff': 'image/tiff'
-    }
-    
-    if file_ext in known_mimes:
-        mime_type = known_mimes[file_ext]
-    else:
-        mime_type, _ = mimetypes.guess_type(image_path)
-    
-    if mime_type is None:
-        mime_type = 'image/jpeg' # 默认兜底
-    # --- 修改结束 ---
-    
-    with open(image_path, "rb") as image_file:
-        encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
-        return f"data:{mime_type};base64,{encoded_string}"
+
+# ==============================================================================
+# MCP Tool Definition
+# ==============================================================================
 
 @mcp.tool(description="Perform deep reasoning or knowledge synthesis to answer specific problems.")
 def knowledge_reasoning(
@@ -60,20 +54,25 @@ def knowledge_reasoning(
     downloaded_paths: Optional[List[str]] = None
 ) -> Dict[str, Any]:
     """
+    Perform reasoning on user intent with visual and textual context.
+    
     Args:
-        user_intent: The original user prompt (Fact-Enriched).
+        user_intent: The original user prompt (fact-enriched).
         need_process_problem: List of specific questions to answer.
-        intent_category: name of generation type,
+        intent_category: Name of generation type determining workflow.
         user_image_path: Path to the user's uploaded image (if any).
-        downloaded_paths: List of paths to downloaded reference images (if Search_Reasoning).
-    output:
-        reasoning_knowledge: A JSON object containing the reasoning results.
+        downloaded_paths: List of paths to downloaded reference images.
+        
+    Returns:
+        Dict containing:
+            - reasoning_knowledge: List of reasoning results
     """
+    client = OpenAI(
+        base_url=config.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+        api_key=config.get("OPENAI_API_KEY", ""),
+    )
 
-    client = OpenAI(base_url=config.get("OPENAI_BASE_URL", "https://yunwu.ai/v1"), api_key=config.get("OPENAI_API_KEY", "sk-X9jXfVLVKHEK6y06p6MRJuEHwvqQX240PPrebQikc1fBXeIS"))
-
-    # 1. 构建 Prompt 上下文
-    # 我们通过 Text Content 清晰地标注不同来源的信息
+    # Build text context
     text_context = f"""
     === Task Configuration ===
     Intent Category: {intent_category}
@@ -84,48 +83,49 @@ def knowledge_reasoning(
     === Problems to Solve (Target Output) ===
     {json.dumps(need_process_problem, indent=2)}
     """
-    
-    # 注意：之前的 retrieved_knowledge 拼接逻辑已被移除，
-    # 因为事实信息现在假设已经包含在 user_intent 中。
 
-    # 2. 构建多模态消息体
+    # Build multimodal message content
     user_content = [{"type": "text", "text": text_context}]
 
-    # A. 添加用户原始图像 (Primary Image)
-    if user_image_path:
+    # Add user's primary image
+    if user_image_path and os.path.exists(user_image_path):
         base64_img = encode_image(user_image_path)
         if base64_img:
             user_content.append({
                 "type": "image_url",
                 "image_url": {
                     "url": base64_img,
-                    "detail": "high" # 确保推理任务使用高分辨率
+                    "detail": "high"  # High resolution for reasoning tasks
                 }
             })
-            # 添加标注告诉模型这是用户的图
-            user_content.append({"type": "text", "text": "[System Note: The image above is the User Input Image.]"})
-            
-    # print(user_content)
+            user_content.append({
+                "type": "text",
+                "text": "[System Note: The image above is the User Input Image.]"
+            })
 
-    # B. 添加搜索结果图像 (Reference Images)
-    # 仅在 Search_Reasoning 模式且有路径时添加
+    # Add reference images (for Search_Reasoning mode)
     if intent_category == "Search_Reasoning_Generation" and downloaded_paths:
-        valid_search_images = 0
-        for idx, img_path in enumerate(downloaded_paths):
-            # 限制参考图数量，防止 Token 爆炸 (例如最多取前3-5张)
-            if valid_search_images >= 5: 
+        valid_count = 0
+        max_ref_images = 5  # Limit to prevent token explosion
+        
+        for img_path in downloaded_paths:
+            if valid_count >= max_ref_images:
                 break
                 
-            base64_ref = encode_image(img_path)
-            if base64_ref:
-                user_content.append({
-                    "type": "image_url",
-                    "image_url": {"url": base64_ref}
-                })
-                valid_search_images += 1
+            if img_path and os.path.exists(img_path):
+                base64_ref = encode_image(img_path)
+                if base64_ref:
+                    user_content.append({
+                        "type": "image_url",
+                        "image_url": {"url": base64_ref}
+                    })
+                    valid_count += 1
         
-        if valid_search_images > 0:
-            user_content.append({"type": "text", "text": "[System Note: The images above are Retrieved Reference Images from search.]"})
+        if valid_count > 0:
+            user_content.append({
+                "type": "text",
+                "text": "[System Note: The images above are Retrieved Reference Images from search.]"
+            })
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -134,31 +134,36 @@ def knowledge_reasoning(
 
     try:
         response = client.chat.completions.create(
-            model=config.get("OPENAI_MODEL_NAME", "gpt-5.1"),
+            model=config.get("OPENAI_MODEL_NAME", "gpt-4"),
             messages=messages,
-            temperature=0.0, # 推理任务需要较低的温度以保证准确性
+            temperature=0.0,  # Low temperature for accurate reasoning
         )
-        content = response.choices[0].message.content.strip()
         
-        # 清理 Markdown
-        if content.startswith("```json"):
-            content = content[7:-3]
-        elif content.startswith("```"):
-            content = content[3:-3]
-            
-        return json.loads(content)
+        content = response.choices[0].message.content.strip()
+        return parse_json_response(content)
 
     except Exception as e:
-        # 错误处理：返回空字典或包含错误信息的字典
         return {
             "reasoning_knowledge": [],
             "error": f"Reasoning failed: {str(e)}"
         }
 
+
+# ==============================================================================
+# Entry Point
+# ==============================================================================
+
 if __name__ == "__main__":
     mcp.run()
-    # 示例调用 (注释掉)
+    
+    # ==============================================================================
+    # Test Cases (Uncomment to test locally)
+    # ==============================================================================
     # user_intent = "Generate a view of the Tower Bridge at coordinates 51.5055° N, 0.0754° W."
     # need_process_problem = ["Confirm the visual appearance of the location mentioned in the request."]
     # intent_category = "Search_Reasoning_Generation"
-    # print(knowledge_reasoning(user_intent=user_intent, need_process_problem=need_process_problem, intent_category=intent_category))
+    # print(knowledge_reasoning(
+    #     user_intent=user_intent,
+    #     need_process_problem=need_process_problem,
+    #     intent_category=intent_category
+    # ))

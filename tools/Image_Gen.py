@@ -1,119 +1,117 @@
+"""
+Image Generation Tool
+=====================
+MCP tool for generating images based on text prompts
+and optional reference images using OpenAI's image models.
+"""
+
 import os
-import math
 import sys
+
+# Add parent directory to path for standalone execution
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import io
 import base64
-import yaml
-import mimetypes
+from pathlib import Path
 from typing import List
 
+import requests
+from PIL import Image
 from mcp.server.fastmcp import FastMCP
 from openai import OpenAI
-from PIL import Image
-from pathlib import Path
-import requests
 
-# 强制标准输出使用 UTF-8 编码
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+# Import shared utilities
+from tools.base import (
+    merge_images_smart,
+    load_config,
+    setup_proxy_from_config,
+    setup_stdio_encoding,
+    _log_info,
+    _log_error,
+    _log_success,
+)
 
-with open(f"./config.yaml", "r", encoding="utf-8") as file:
-    config = yaml.safe_load(file)
+# ==============================================================================
+# Configuration
+# ==============================================================================
 
-if config.get("proxy_on", False):
-    os.environ["http_proxy"] = config.get("HTTP_PROXY", "http://127.0.0.1:7890")
-    os.environ["https_proxy"] = config.get("HTTPS_PROXY", "http://127.0.0.1:7890")
+setup_stdio_encoding()
+config = load_config("./config.yaml")
+setup_proxy_from_config(config)
 
-TEMP_DIR = Path(config.get("temp_dir", "./temp").get("image_gen", "./temp/image_gen")).absolute()
+# Get temp directory - use session-specific if available
+session_dir = os.environ.get("MINDBRUSH_SESSION_DIR")
+if session_dir:
+    TEMP_DIR = Path(session_dir) / "temp" / "image_gen"
+else:
+    temp_dir_config = config.get("temp_dir", {})
+    if isinstance(temp_dir_config, dict):
+        TEMP_DIR = Path(temp_dir_config.get("image_gen", "./temp/image_gen")).absolute()
+    else:
+        TEMP_DIR = Path("./temp/image_gen").absolute()
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
-def merge_images_smart(image_paths: List[str], max_side: int = 2048) -> Image.Image:
-    """
-    智能网格拼接：将多张图片拼接成一个近似正方形的网格，
-    保持每张图片的原始比例，不拉伸变形。
-    """
-    if not image_paths:
-        raise ValueError("No images provided for merging.")
-        
-    images = []
-    for path in image_paths:
-        try:
-            img = Image.open(path).convert("RGB")
-            images.append(img)
-        except Exception as e:
-            # 修改：使用 stderr 打印日志，防止破坏 MCP 协议
-            sys.stderr.write(f"Warning: Could not open {path}, skipping. Error: {e}\n")
-
-    if not images:
-        raise ValueError("No valid images found to merge.")
-
-    count = len(images)
-    
-    # 1. 计算网格的行数和列数
-    cols = math.ceil(math.sqrt(count))
-    rows = math.ceil(count / cols)
-
-    # 2. 确定单个网格单元的目标尺寸
-    cell_max_w = 768
-    cell_max_h = 768
-    
-    # 3. 创建大画布
-    grid_width = cols * cell_max_w
-    grid_height = rows * cell_max_h
-    
-    combined_image = Image.new("RGB", (grid_width, grid_height), (255, 255, 255)) # 白色背景
-
-    # 4. 遍历图片并粘贴
-    for index, img in enumerate(images):
-        row_idx = index // cols
-        col_idx = index % cols
-        
-        x_offset = col_idx * cell_max_w
-        y_offset = row_idx * cell_max_h
-        
-        # 核心逻辑：保持比例缩放 (Contain)
-        img_aspect = img.width / img.height
-        cell_aspect = cell_max_w / cell_max_h
-        
-        if img_aspect > cell_aspect:
-            new_w = cell_max_w
-            new_h = int(cell_max_w / img_aspect)
-        else:
-            new_h = cell_max_h
-            new_w = int(cell_max_h * img_aspect)
-            
-        resized_img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-        
-        paste_x = x_offset + (cell_max_w - new_w) // 2
-        paste_y = y_offset + (cell_max_h - new_h) // 2
-        
-        combined_image.paste(resized_img, (paste_x, paste_y))
-
-    # 5. 最后整体缩放
-    if combined_image.width > max_side or combined_image.height > max_side:
-        combined_image.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
-
-    return combined_image
-
-# # ---用于 Base64 编码 ---
-def encode_file(file_path):
-    mime_type, _ = mimetypes.guess_type(file_path)
-    if not mime_type or not mime_type.startswith("image/"):
-        raise ValueError("不支持或无法识别的图像格式")
-
-    try:
-        with open(file_path, "rb") as image_file:
-            encoded_string = base64.b64encode(
-                image_file.read()).decode('utf-8')
-        return f"data:{mime_type};base64,{encoded_string}"
-    except IOError as e:
-        raise IOError(f"读取文件时出错: {file_path}, 错误: {str(e)}")
-
-# 初始化 MCP 服务
+# Initialize MCP server
 mcp = FastMCP(
     name="Unified Image Generator",
     instructions="This MCP provides both text-to-image and image-guided generation using OpenAI's image models."
 )
+
+
+# ==============================================================================
+# Helper Functions
+# ==============================================================================
+
+def _download_image_from_url(url: str, file_path: str) -> bool:
+    """
+    Download an image from URL and save to file.
+    
+    Args:
+        url: Image URL to download
+        file_path: Local path to save the image
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        response = requests.get(url, stream=True, timeout=30)
+        response.raise_for_status()
+        
+        with open(file_path, "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        
+        return True
+    except Exception as e:
+        _log_error(f"Failed to download image from URL: {e}")
+        return False
+
+
+def _save_base64_image(b64_data: str, file_path: str) -> bool:
+    """
+    Decode and save a base64 image.
+    
+    Args:
+        b64_data: Base64 encoded image data
+        file_path: Local path to save the image
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        img_bytes = base64.b64decode(b64_data)
+        with open(file_path, "wb") as f:
+            f.write(img_bytes)
+        return True
+    except Exception as e:
+        _log_error(f"Failed to decode Base64: {e}")
+        return False
+
+
+# ==============================================================================
+# MCP Tool Definition
+# ==============================================================================
 
 @mcp.tool(
     name="unified_image_generator",
@@ -122,31 +120,41 @@ mcp = FastMCP(
 def unified_image_generator(
     prompt: str,
     reference_images: List[str] = []
-) -> List[str]: # <--- 修改 1: 返回类型必须与实际返回值 saved_paths (list) 一致
+) -> List[str]:
+    """
+    Generate images using text prompt with optional reference images.
     
+    Args:
+        prompt: Text description of the image to generate.
+        reference_images: Optional list of reference image paths for guided generation.
+        
+    Returns:
+        List of paths to generated images, or error messages.
+    """
     size = "1024x1024"
-
+    saved_paths: List[str] = []
+    
     client = OpenAI(
-        base_url=config.get("OPENAI_BASE_URL", "https://yunwu.ai/v1"),
-        api_key=config.get("OPENAI_API_KEY", "sk-X9jXfVLVKHEK6y06p6MRJuEHwvqQX240PPrebQikc1fBXeIS"),
+        base_url=config.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+        api_key=config.get("OPENAI_API_KEY", ""),
     )
 
-    saved_paths: List[str] = []
-
     # ------------------------
-    # 图像引导生成（有图像）
+    # Image-Guided Generation
     # ------------------------
     if reference_images:
         try:
+            # Merge reference images into grid
             combined_img = merge_images_smart(reference_images)
-
+            
+            # Convert to bytes for API
             img_buffer = io.BytesIO()
-            combined_img.save(img_buffer, format='PNG')
+            combined_img.save(img_buffer, format="PNG")
             img_bytes = img_buffer.getvalue()
             
             result = client.images.edit(
-                model=config.get("IMAGE_EDIT_MODEL_NAME", "qwen-image-edit-plus-2025-12-15"),
-                image=img_bytes, 
+                model=config.get("IMAGE_EDIT_MODEL_NAME", "dall-e-2"),
+                image=img_bytes,
                 prompt=prompt,
                 size=size,
                 n=1,
@@ -155,107 +163,96 @@ def unified_image_generator(
             combined_img.close()
             img_buffer.close()
             
+            # Process response
             for index, img_data in enumerate(result.data, start=1):
-                filename = f"guided.png"
-                file_path = os.path.join(TEMP_DIR, filename)
+                filename = f"guided_{index}.png"
+                file_path = str(TEMP_DIR / filename)
                 
-                if getattr(img_data, 'url', None):
-                    image_url = img_data.url
-                    # 修改：使用 stderr
-                    sys.stderr.write(f"⬇️ Downloading image from URL: {image_url}\n")
-                    
-                    try:
-                        response = requests.get(image_url, stream=True)
-                        response.raise_for_status()
-                        
-                        with open(file_path, "wb") as f:
-                            for chunk in response.iter_content(chunk_size=8192):
-                                f.write(chunk)
-                        
+                if getattr(img_data, "url", None):
+                    _log_info(f"Downloading image from URL...")
+                    if _download_image_from_url(img_data.url, file_path):
                         saved_paths.append(file_path)
-                        sys.stderr.write(f"✅ Image saved to: {file_path}\n")
+                        _log_success(f"Image saved to: {file_path}")
+                    else:
+                        return [f"Error: Failed to download image"]
                         
-                    except Exception as e:
-                        sys.stderr.write(f"❌ Failed to download image from URL: {e}\n")
-                        return [str(e)] # 修改：返回列表以匹配类型
-
-                elif getattr(img_data, 'b64_json', None):
-                    try:
-                        img_bytes = base64.b64decode(img_data.b64_json)
-                        with open(file_path, "wb") as f:
-                            f.write(img_bytes)
-                        
+                elif getattr(img_data, "b64_json", None):
+                    if _save_base64_image(img_data.b64_json, file_path):
                         saved_paths.append(file_path)
-                        sys.stderr.write(f"✅ Image saved from Base64 to: {file_path}\n")
-                    except Exception as e:
-                        sys.stderr.write(f"❌ Failed to decode Base64: {e}\n")
-                        return [str(e)] # 修改：返回列表
-                        
+                        _log_success(f"Image saved from Base64 to: {file_path}")
+                    else:
+                        return [f"Error: Failed to decode Base64"]
                 else:
-                    sys.stderr.write("❌ Error: No valid image data (URL or b64_json) found in response.\n")
+                    _log_error("No valid image data found in response")
                     return ["Error: No valid image data found"]
-                
+                    
         except Exception as e:
-            # 修改：返回列表以匹配类型
-            return [str(e)]
+            return [f"Error: {str(e)}"]
             
     # ------------------------
-    # 文本生成（无图像）
+    # Text-Only Generation
     # ------------------------
     else:
         try:
             result = client.images.generate(
-                model=config.get("IMAGE_GEN_MODEL_NAME", "qwen-image-plus"),
+                model=config.get("IMAGE_GEN_MODEL_NAME", "dall-e-3"),
                 prompt=prompt,
                 n=1,
-                quality="medium",
+                quality="standard",
                 size=size,
             )
             
         except Exception as e:
-            return [str(e)] # 修改：返回列表
+            return [f"Error: {str(e)}"]
 
+        # Process response
         for index, img_data in enumerate(result.data, start=1):
-            filename = f"textgen.png"
-            file_path = os.path.join(TEMP_DIR, filename)
+            filename = f"textgen_{index}.png"
+            file_path = str(TEMP_DIR / filename)
 
-            if getattr(img_data, 'url', None):
-                image_url = img_data.url
-                sys.stderr.write(f"⬇️ Downloading image from URL: {image_url}\n")
-                
-                try:
-                    response = requests.get(image_url, stream=True)
-                    response.raise_for_status()
-                    
-                    with open(file_path, "wb") as f:
-                        for chunk in response.iter_content(chunk_size=8192):
-                            f.write(chunk)
-                    
+            if getattr(img_data, "url", None):
+                _log_info(f"Downloading image from URL...")
+                if _download_image_from_url(img_data.url, file_path):
                     saved_paths.append(file_path)
-                    sys.stderr.write(f"✅ Image saved to: {file_path}\n")
-                    
-                except Exception as e:
-                    sys.stderr.write(f"❌ Failed to download image from URL: {e}\n")
-                    return [str(e)]
+                    _log_success(f"Image saved to: {file_path}")
+                else:
+                    return [f"Error: Failed to download image"]
 
-            elif getattr(img_data, 'b64_json', None):
-                try:
-                    img_bytes = base64.b64decode(img_data.b64_json)
-                    with open(file_path, "wb") as f:
-                        f.write(img_bytes)
-                    
+            elif getattr(img_data, "b64_json", None):
+                if _save_base64_image(img_data.b64_json, file_path):
                     saved_paths.append(file_path)
-                    sys.stderr.write(f"✅ Image saved from Base64 to: {file_path}\n")
-                except Exception as e:
-                    sys.stderr.write(f"❌ Failed to decode Base64: {e}\n")
-                    return [str(e)]
-                    
+                    _log_success(f"Image saved from Base64 to: {file_path}")
+                else:
+                    return [f"Error: Failed to decode Base64"]
             else:
-                sys.stderr.write("❌ Error: No valid image data (URL or b64_json) found in response.\n")
+                _log_error("No valid image data found in response")
                 return ["Error: No valid image data found"]
 
     return saved_paths
 
-# 启动 MCP 服务
+
+# ==============================================================================
+# Entry Point
+# ==============================================================================
+
 if __name__ == "__main__":
     mcp.run()
+
+    # ==============================================================================
+    # Test Cases (Uncomment to test locally)
+    # ==============================================================================
+    # # Test 1: Text-only generation
+    # result1 = unified_image_generator(
+    #     prompt="A serene mountain lake at sunset with snow-capped peaks reflected in the water"
+    # )
+    # print("Text-only generation:", result1)
+    # 
+    # # Test 2: Image-guided generation
+    # result2 = unified_image_generator(
+    #     prompt="Transform this into a watercolor painting style",
+    #     reference_images=[
+    #         r"E:\github-project\Idea2Image\code\cases\9_Science-and-Logic_1\textgen.png",
+    #         r"E:\github-project\Idea2Image\code\cases\8_MathVerse_11\guided.png",
+    #     ]
+    # )
+    # print("Image-guided generation:", result2)

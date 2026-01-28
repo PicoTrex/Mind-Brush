@@ -1,38 +1,77 @@
-from fastmcp import FastMCP
-import yaml
+"""
+Image RAG Tool
+==============
+MCP tool for searching and downloading images from the web
+using the Serper API for visual reference retrieval.
+"""
+
 import os
-import requests
-import argparse
+import sys
+
+# Add parent directory to path for standalone execution
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import json
 from pathlib import Path
 from typing import List
-from PIL import Image
 from io import BytesIO
-import sys
 
-with open(f"./config.yaml", "r", encoding="utf-8") as file:
-    config = yaml.safe_load(file)
+import requests
+from PIL import Image
+from fastmcp import FastMCP
 
-if config.get("proxy_on", False):
-    os.environ["http_proxy"] = config.get("HTTP_PROXY", "http://127.0.0.1:7890")
-    os.environ["https_proxy"] = config.get("HTTPS_PROXY", "http://127.0.0.1:7890")
+# Import shared utilities
+from tools.base import (
+    load_config,
+    setup_proxy_from_config,
+    setup_stdio_encoding,
+    _log_info,
+    _log_error,
+    _log_success,
+    _log_warning,
+)
 
-if sys.platform.startswith('win'):
-    sys.stdout.reconfigure(encoding='utf-8')
-    sys.stderr.reconfigure(encoding='utf-8')
+# ==============================================================================
+# Configuration
+# ==============================================================================
 
-# ✅ MCP 初始化
-mcp = FastMCP("My Image Search")
+setup_stdio_encoding()
+config = load_config("./config.yaml")
+setup_proxy_from_config(config)
 
-TEMP_DIR = Path(config.get("temp_dir", "./temp").get("image_rag", "./temp/image_rag")).absolute()
+# Get temp directory - use session-specific if available
+session_dir = os.environ.get("MINDBRUSH_SESSION_DIR")
+if session_dir:
+    TEMP_DIR = Path(session_dir) / "temp" / "image_rag"
+else:
+    temp_dir_config = config.get("temp_dir", {})
+    if isinstance(temp_dir_config, dict):
+        TEMP_DIR = Path(temp_dir_config.get("image_rag", "./temp/image_rag")).absolute()
+    else:
+        TEMP_DIR = Path("./temp/image_rag").absolute()
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
-# ✅ Serper API 配置
-SERPER_API_KEY = config.get("SERPER_API_KEY", "bdf9b167a18e2e9071e4eed39f257aa28d8ad10c")
+# Serper API configuration
+SERPER_API_KEY = config.get("SERPER_API_KEY", "")
+
+# Initialize MCP server
+mcp = FastMCP("My Image Search")
+
+
+# ==============================================================================
+# Helper Functions
+# ==============================================================================
 
 def fetch_serper_image_links(query: str, num_images: int = 5) -> List[str]:
     """
-    使用 Serper API 获取图像链接
+    Fetch image links using Serper API.
+    
+    Args:
+        query: Search query string
+        num_images: Number of images to retrieve
+        
+    Returns:
+        List of image URLs
     """
     url = "https://google.serper.dev/images"
     payload = json.dumps({
@@ -40,8 +79,8 @@ def fetch_serper_image_links(query: str, num_images: int = 5) -> List[str]:
         "num": num_images
     })
     headers = {
-        'X-API-KEY': SERPER_API_KEY,
-        'Content-Type': 'application/json'
+        "X-API-KEY": SERPER_API_KEY,
+        "Content-Type": "application/json"
     }
 
     try:
@@ -49,87 +88,125 @@ def fetch_serper_image_links(query: str, num_images: int = 5) -> List[str]:
         response.raise_for_status()
         data = response.json()
         
-        # Serper 图片链接在 images -> imageUrl
+        # Extract image URLs from response
         items = data.get("images", [])
         links = []
         for item in items:
             image_url = item.get("imageUrl")
             if image_url:
                 links.append(image_url)
-                
-        # 记录 URL 获取日志
-        with open(TEMP_DIR / "google_fetched_image_urls.txt", "w", encoding="utf-8") as f:
-            for link in links:
-                f.write(f"{query} --> {link}\n")
-                
+        
+        # Log fetched URLs for debugging
+        log_file = TEMP_DIR / "fetched_image_urls.txt"
+        try:
+            with open(log_file, "a", encoding="utf-8") as f:
+                for link in links:
+                    f.write(f"{query} --> {link}\n")
+        except Exception:
+            pass  # Non-critical logging
+        
         return links
+        
     except Exception as e:
-        print(f"Error fetching Serper images: {e}")
+        _log_error(f"Error fetching Serper images: {e}")
         return []
+
 
 def download_image_with_pil(url: str, filename_prefix: str) -> str:
     """
-    下载图像，使用 PIL 验证并保存到本地
+    Download image with PIL validation.
+    
+    Args:
+        url: Image URL to download
+        filename_prefix: Prefix for saved filename
+        
+    Returns:
+        Local file path if successful, empty string otherwise
     """
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     }
+    
     try:
         response = requests.get(url, headers=headers, stream=True, timeout=10)
         response.raise_for_status()
         
-        # 使用 PIL 打开数据流，验证这是否是真正的图片
+        # Validate with PIL
         image = Image.open(BytesIO(response.content))
-
-        # 确定扩展名
-        ext = image.format.lower() if image.format else "jpg"
-        if ext == "jpeg": ext = "jpg"
+        
+        # Determine extension from format
+        ext = (image.format or "jpg").lower()
+        if ext == "jpeg":
+            ext = "jpg"
         
         filename = f"{filename_prefix}.{ext}"
         file_path = TEMP_DIR / filename
         image.save(file_path)
+        
         return str(file_path)
+        
     except Exception as e:
-        # 失败时返回 None，让上层逻辑尝试下一张
-        return None
+        # Return empty string to indicate failure
+        return ""
+
+
+def _sanitize_filename(query: str) -> str:
+    """Create a safe filename from query string."""
+    safe_chars = [c for c in query if c.isalnum() or c in (" ", "_")]
+    return "".join(safe_chars).strip().replace(" ", "_")[:50]
+
+
+# ==============================================================================
+# MCP Tool Definition
+# ==============================================================================
 
 @mcp.tool()
 def search_and_download_images_batch(image_queries: List[str]) -> List[str]:
     """
-    MCP 工具：批量搜索并下载图像
-
+    Batch search and download images for multiple queries.
+    
     Args:
-        image_queries (List[str]): 搜索关键词列表
+        image_queries: List of search keywords
+        
     Returns:
-        downloaded_paths(List[str]): 本地成功保存的图片路径
+        List of local paths to successfully downloaded images
     """
-    downloaded_paths = []
-    max_attempts = 5 # 每个 query 尝试下载前 5 张图
+    downloaded_paths: List[str] = []
+    max_attempts = 5  # Try up to 5 images per query
 
     for query in image_queries:
-        # print(f"🔍 Processing Image Search: {query}")
         image_links = fetch_serper_image_links(query, num_images=max_attempts)
         success = False
 
         for idx, url in enumerate(image_links[:max_attempts]):
-            # 生成安全的文件名
-            safe_query = "".join([c for c in query if c.isalnum() or c in (' ', '_')]).strip().replace(' ', '_')
-            prefix = f"{safe_query}_{idx+1}"
+            # Generate safe filename
+            safe_query = _sanitize_filename(query)
+            prefix = f"{safe_query}_{idx + 1}"
             
-            # 尝试下载
+            # Attempt download
             file_path = download_image_with_pil(url, prefix)
             
             if file_path:
                 downloaded_paths.append(file_path)
                 success = True
-                break  # 策略：只要这一张成功了，就不下载后面的了
+                break  # One successful download per query
         
         if not success:
-            print(f"❌ Failed to download image for: {query}")
-            
+            _log_warning(f"Failed to download image for: {query}")
+    
     return downloaded_paths
 
 
+# ==============================================================================
+# Entry Point
+# ==============================================================================
+
 if __name__ == "__main__":
     mcp.run()
-    # print(search_and_download_logic(['Pop Mart Tom and Jerry Forbidden Compass Series Tom in Lantern']))
+
+    # ==============================================================================
+    # Test Cases (Uncomment to test locally)
+    # ==============================================================================
+    # query = ["Cyberpunk cityscape at night", "Traditional Japanese temple"]
+    # result = search_and_download_images_batch(query)
+    # print("Downloaded images:", result)

@@ -1,14 +1,36 @@
-# Welcome to Chainlit! 🚀🤖
+# Welcome to MindBrush! 🎨
 
-Hi there, Developer! 👋 We're excited to have you on board. Chainlit is a powerful tool designed to help you prototype, debug and share applications built on top of LLMs.
+MindBrush is an AI-powered image generation agent that combines:
 
-## Useful Links 🔗
+- 🧠 **Intelligent Intent Analysis** - Understands what you want to create
+- 🔍 **Knowledge Retrieval** - Searches for relevant information
+- 💡 **Smart Reasoning** - Processes and synthesizes knowledge
+- ✨ **Creative Generation** - Produces stunning images
 
-- **Documentation:** Get started with our comprehensive [Chainlit Documentation](https://docs.chainlit.io) 📚
-- **Discord Community:** Join our friendly [Chainlit Discord](https://discord.gg/k73SQ3FyUh) to ask questions, share your projects, and connect with other developers! 💬
+## Features
 
-We can't wait to see what you create with Chainlit! Happy coding! 💻😊
+### Multi-Modal Input
 
-## Welcome screen
+- 📝 Text descriptions
+- 🖼️ Reference images  
+- 📝🖼️ Combined text + image
 
-To modify the welcome screen, edit the `chainlit.md` file at the root of your project. If you do not want a welcome screen, just leave this file empty.
+### Smart Workflow
+
+MindBrush automatically chooses the best workflow for your request:
+
+- Direct generation for simple prompts
+- Knowledge search for factual content
+- Reasoning for complex scenarios
+
+### Real-Time Progress
+
+Watch each step of the AI workflow as it happens!
+
+## Getting Started
+
+1. **Type** your image description
+2. **Upload** reference images (optional)
+3. **Send** and watch the magic happen! ✨
+
+Enjoy creating with MindBrush! 🚀

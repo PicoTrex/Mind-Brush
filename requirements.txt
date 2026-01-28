@@ -4,4 +4,5 @@ openai
 dashscope
 bs4
 fastmcp
+mcp
 chainlit
