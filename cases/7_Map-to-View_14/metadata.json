@@ -1,0 +1,16 @@
+{
+  "Type": "7_Map-to-View",
+  "ID": 14,
+  "Image_Name": "7_Map-to-View/014_Milan_Cathedral.png",
+  "Generation_Type": "I2I",
+  "Prompt": "Draw the real-world content seen from the red arrow",
+  "World_Knowledge": {
+    "text": "Milan Cathedral, Italy",
+    "image": "7_Map-to-View/7_Map-to-View_14_Reference 1_0.jpg"
+  },
+  "Checklist": [
+    "The image depicts the Milan Cathedral, Italy clearly.",
+    "The viewing angle and perspective align with the red arrow direction (consistent with the reference image), displaying an oblique view of the front facade and the left side of the cathedral.",
+    "The image features a bright daytime setting with a clear blue sky."
+  ]
+}

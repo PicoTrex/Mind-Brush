@@ -1,0 +1,16 @@
+{
+  "Type": "1_SpecialEvent",
+  "ID": 6,
+  "Image_Name": null,
+  "Generation_Type": "T2I",
+  "Prompt": "Generate an image of a scoreboard for the final game of the 2025 NBA Finals, displaying the team logos and scores for the corresponding teams.",
+  "World_Knowledge": "Western Conference champions Oklahoma City Thunder defeated Eastern Conference champions Indiana Pacers 4-3.",
+  "Reference 1": "1_SpecialEvent/1_SpecialEvent_6_Reference 1_0.png",
+  "Reference 2": "1_SpecialEvent/1_SpecialEvent_6_Reference 2_0.png",
+  "Checklist": [
+    "The Oklahoma City Thunder team logo is visible.",
+    "The Indiana Pacers team logo is visible.",
+    "The text \"2025 NBA Finals\" is clearly legible.",
+    "The score \"4-3\" (or \"4\" for Thunder and \"3\" for Pacers) is displayed."
+  ]
+}

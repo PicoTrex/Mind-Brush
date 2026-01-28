@@ -1,0 +1,7 @@
+pillow
+geopy
+openai
+dashscope
+bs4
+fastmcp
+chainlit

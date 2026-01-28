@@ -1,0 +1,16 @@
+{
+  "Type": "9_Science-and-Logic",
+  "ID": 1,
+  "Image_Name": null,
+  "Generation_Type": "T2I",
+  "Prompt": "Generate an image of the process where potassium permanganate granules fall into water and dissolve.",
+  "World_Knowledge": {
+    "text": "A deep pink to purple solution",
+    "image": "9_Science-and-Logic/9_Science-and-Logic_1_World_Knowledge_0.JPG"
+  },
+  "Checklist": [
+    "The image accurately depicts the deep purple or magenta color characteristic of potassium permanganate.",
+    "The image shows visible streaks or swirls of color diffusing through the water, representing the dissolving process rather than a uniform liquid.",
+    "The solution exhibits a gradient of intensity, appearing darker and denser near the bottom or source of the granules, consistent with the reference."
+  ]
+}
