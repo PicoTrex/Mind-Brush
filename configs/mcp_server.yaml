@@ -1,0 +1,39 @@
+proxy:
+  proxy_on: True
+  HTTP_PROXY: "http://127.0.0.1:7890"
+  HTTPS_PROXY: "http://127.0.0.1:7890"
+
+temp_dir:
+  default: "./temp"
+  image_gen: "./temp/image_gen"
+  image_rag: "./temp/image_rag"
+  text_rag: "./temp/text_rag"
+
+mcp_servers:
+  IntentAnalysis:
+    command: "python"
+    path: "./tools/Intent_Analysis.py"
+
+  KeywordGeneration:
+    command: "python"
+    path: "./tools/Keyword_Generation.py"
+
+  TextRAG:
+    command: "python"
+    path: "./tools/Text_RAG.py"
+
+  ImageRAG:
+    command: "python"
+    path: "./tools/Image_RAG.py"
+
+  KnowledgeReasoning:
+    command: "python"
+    path: "./tools/Knowledge_Reasoning.py"
+
+  KnowledgeReview:
+    command: "python"
+    path: "./tools/Knowledge_Review.py"
+
+  ImageGen:
+    command: "python"
+    path: "./tools/Image_Gen.py"
