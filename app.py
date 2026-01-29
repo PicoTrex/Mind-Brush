@@ -157,13 +157,19 @@ async def start():
     cl.user_session.set("session_id", session_id)
     
     await cl.Message(
-        content=f"👋 Welcome to **MindBrush**! 🎨\n\n"
-                f"🆔 Session ID: `{session_id}`\n\n"
-                f"You can:\n"
-                f"- 📝 Send text to describe what you want to generate\n"
-                f"- 🖼️ Upload an image for reference\n"
-                f"- 📝🖼️ Send both text and image together\n\n"
-                f"Try it now!",
+        content=(
+            f"## 🎨 Welcome to **MindBrush**\n"
+            f"--- \n"
+            f"Your creative companion for AI-powered image generation.\n\n"
+            f"> 🆔 **Session ID**\n"
+            f"> `{session_id}`\n\n"
+            f"### 🚀 **Quick Start Guide**\n"
+            f"* **Text-to-Image**: Describe your vision (e.g., *'A cyberpunk city in the rain'*).\n"
+            f"* **Image-to-Image**: Upload a reference photo to guide the style.\n"
+            f"* **Multi-Modal**: Send both text and images for precise control.\n\n"
+            f"--- \n"
+            f"✨ *Type your prompt below to start creating!*"
+        ),
     ).send()
 
 
@@ -222,7 +228,7 @@ async def main(message: cl.Message):
             ui_step.output = format_step_output(step)
             
             # Special handling for Image Search - display downloaded images
-            if step.step_name == "Image Search" and step.status == StepStatus.COMPLETED:
+            if (step.step_name == "Image Search" and step.status == StepStatus.COMPLETED):
                 image_paths = []
                 
                 # Extract image paths from output

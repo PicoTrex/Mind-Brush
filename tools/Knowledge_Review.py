@@ -151,7 +151,7 @@ def knowledge_review(
     try:
         # 7. Call LLM
         response = client.chat.completions.create(
-            model=config.get("OPENAI_MODEL_NAME", "gpt-4"),
+            model=config.get("OPENAI_MODEL_NAME", "gpt-5.1"),
             messages=messages,
             temperature=0.3,  # Low temperature for consistency
             max_tokens=1000,

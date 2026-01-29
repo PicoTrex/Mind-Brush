@@ -63,7 +63,7 @@ enabled = true
 # 3. For specific file extensions:
 #    accept = { "application/octet-stream" = [".xyz", ".pdb"] }
 # Note: Using "*/*" is not recommended as it may cause browser warnings
-accept = ["*/*"]
+accept = ["image/*"]
 max_files = 20
 max_size_mb = 500
 
@@ -92,13 +92,13 @@ allowed_executables = ["npx", "uvx"]
 
 [UI]
 # Name of the assistant.
-name = "Assistant"
+name = "MindBrush Agent"
 
 # default_theme = "dark"
 
 # Force a specific language for all users (e.g., "en-US", "he-IL", "fr-FR")
 # If not set, the browser's language will be used
-# language = "en-US"
+language = "en-US"
 
 # layout = "wide"
 
@@ -121,7 +121,7 @@ cot = "full"
 
 # Specify a CSS file that can be used to customize the user interface.
 # The CSS file can be served from the public directory or via an external link.
-# custom_css = "/public/test.css"
+custom_css = "/public/style.css"
 
 # Specify additional attributes for a custom CSS file
 # custom_css_attributes = "media=\"print\""
@@ -131,7 +131,7 @@ cot = "full"
 # custom_js = "/public/test.js"
 
 # The style of alert boxes. Can be "classic" or "modern".
-alert_style = "classic"
+alert_style = "modern"
 
 # Specify additional attributes for custom JS file
 # custom_js_attributes = "async type = \"module\""
@@ -150,10 +150,10 @@ alert_style = "classic"
 # custom_meta_image_url = "https://chainlit-cloud.s3.eu-west-3.amazonaws.com/logo/chainlit_banner.png"
 
 # Load assistant logo directly from URL.
-logo_file_url = ""
+logo_file_url = "./public/logo.png"
 
 # Load assistant avatar image directly from URL.
-default_avatar_file_url = ""
+default_avatar_file_url = "./public/avatar.png"
 
 # Specify a custom build directory for the frontend.
 # This can be used to customize the frontend code.

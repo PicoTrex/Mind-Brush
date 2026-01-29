@@ -55,8 +55,10 @@ TEMP_DIR.mkdir(parents=True, exist_ok=True)
 SERPER_API_KEY = config.get("SERPER_API_KEY", "")
 
 # Initialize MCP server
-mcp = FastMCP("My Image Search")
-
+mcp = FastMCP(
+    name="Image Searcher",
+    instructions="MCP tool for searching and downloading images from the web using the Serper API for visual reference retrieval."
+)
 
 # ==============================================================================
 # Helper Functions
@@ -208,5 +210,5 @@ if __name__ == "__main__":
     # Test Cases (Uncomment to test locally)
     # ==============================================================================
     # query = ["Cyberpunk cityscape at night", "Traditional Japanese temple"]
-    # result = search_and_download_images_batch(query)
+    # result = search_and_download_images_batch_test(query)
     # print("Downloaded images:", result)

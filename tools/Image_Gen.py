@@ -2,7 +2,7 @@
 Image Generation Tool
 =====================
 MCP tool for generating images based on text prompts
-and optional reference images using OpenAI's image models.
+and optional reference images using image models.
 """
 
 import os
@@ -55,7 +55,7 @@ TEMP_DIR.mkdir(parents=True, exist_ok=True)
 # Initialize MCP server
 mcp = FastMCP(
     name="Unified Image Generator",
-    instructions="This MCP provides both text-to-image and image-guided generation using OpenAI's image models."
+    instructions="This MCP provides both text-to-image and image-guided generation using image models."
 )
 
 
@@ -135,8 +135,8 @@ def unified_image_generator(
     saved_paths: List[str] = []
     
     client = OpenAI(
-        base_url=config.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-        api_key=config.get("OPENAI_API_KEY", ""),
+        base_url=config.get("IMAGE_BASE_URL", "https://yunwu.ai/v1"),
+        api_key=config.get("IMAGE_API_KEY", ""),
     )
 
     # ------------------------
@@ -153,7 +153,7 @@ def unified_image_generator(
             img_bytes = img_buffer.getvalue()
             
             result = client.images.edit(
-                model=config.get("IMAGE_EDIT_MODEL_NAME", "dall-e-2"),
+                model=config.get("IMAGE_EDIT_MODEL_NAME", "qwen-image-edit-plus-2025-12-15"),
                 image=img_bytes,
                 prompt=prompt,
                 size=size,
@@ -195,10 +195,10 @@ def unified_image_generator(
     else:
         try:
             result = client.images.generate(
-                model=config.get("IMAGE_GEN_MODEL_NAME", "dall-e-3"),
+                model=config.get("IMAGE_GEN_MODEL_NAME", "qwen-image-plus"),
                 prompt=prompt,
                 n=1,
-                quality="standard",
+                quality="medium",
                 size=size,
             )
             
@@ -241,12 +241,12 @@ if __name__ == "__main__":
     # ==============================================================================
     # Test Cases (Uncomment to test locally)
     # ==============================================================================
-    # # Test 1: Text-only generation
+    # Test 1: Text-only generation
     # result1 = unified_image_generator(
     #     prompt="A serene mountain lake at sunset with snow-capped peaks reflected in the water"
     # )
     # print("Text-only generation:", result1)
-    # 
+    
     # # Test 2: Image-guided generation
     # result2 = unified_image_generator(
     #     prompt="Transform this into a watercolor painting style",

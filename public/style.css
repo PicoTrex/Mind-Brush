@@ -1,0 +1,11 @@
+.ai-message span.rounded-full.h-5.w-5 {
+    width: 40px !important;
+    height: 40px !important;
+    margin-top: 0px !important;
+}
+
+.ai-message span.rounded-full.h-5.w-5 img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover;
+}
