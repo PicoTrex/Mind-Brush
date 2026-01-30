@@ -18,12 +18,14 @@ GOOGLE_SEARCH_ENGINE_ID: "b59238bad54ef46a0"
 # SERPER API [required]
 SERPER_API_KEY: "bdf9b167a18e2e9071e4eed39f257aa28d8ad10c"
 
-proxy_on: True
-HTTP_PROXY: "http://127.0.0.1:7890"
-HTTPS_PROXY: "http://127.0.0.1:7890"
-
+# Temporary directory settings [required]
 temp_dir:
   default: "./temp"
   image_gen: "./temp/image_gen"
   image_rag: "./temp/image_rag"
   text_rag: "./temp/text_rag"
+
+# Proxy settings [optional]
+proxy_on: True
+HTTP_PROXY: "http://127.0.0.1:7890"
+HTTPS_PROXY: "http://127.0.0.1:7890"
