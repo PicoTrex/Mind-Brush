@@ -41,9 +41,10 @@
 
 ## 📽️ Demo
 
-| Case 1 | Case 2 |
+| Search Case | Search & Reason Case |
 | :---: | :---: |
-| <video src="assets/case_1.mp4" controls></video> | <video src="assets/case_2.mp4" controls></video> |
+| <video src="https://github.com/user-attachments/assets/36d97bad-e94f-4bc2-aae8-5d54451b93bc" controls></video> | <video src="https://github.com/user-attachments/assets/c0639fab-f1d0-4ffd-9120-d43e418f2bd3" controls></video> |
+
 
 
 ## 🚀 Quickstart
