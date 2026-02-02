@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://arxiv.org/abs/2511.20415" target="_blank">
+  <a href="" target="_blank">
     <img src="https://img.shields.io/badge/-arXiv-%23b91c1c?style=flat&logo=arxiv&logoColor=white&labelColor=%23b91c1c" alt="arXiv Paper">
   </a>
   <a href="https://github.com/PicoTrex/Mind-Brush" target="_blank">
@@ -29,7 +29,7 @@
 
 ## 📰 News
 
-- **[2026-02-01]** 🔥 We have released [Paper](https://arxiv.org/abs/2511.20415), [Code](https://github.com/PicoTrex/Mind-Brush) and [Dataset](https://huggingface.co/datasets/PicoTrex/Mind-Brush)!
+- **[2026-02-01]** 🔥 We have released [Paper](./), [Code](https://github.com/PicoTrex/Mind-Brush) and [Dataset](https://huggingface.co/datasets/PicoTrex/Mind-Brush)!
 
 ## 🏆 Contributions
 
@@ -43,7 +43,7 @@
 
 | Case 1 | Case 2 |
 | :---: | :---: |
-| <video src="assets/case1.mp4" controls></video> | <video src="assets/case2.mp4" controls></video> |
+| <video src="assets/case_1.mp4" controls></video> | <video src="assets/case_2.mp4" controls></video> |
 
 
 ## 🚀 Quickstart
@@ -52,7 +52,7 @@
 
 ```bash
 git clone https://github.com/PicoTrex/Mind-Brush.git
-cd Mind-Brsuh
+cd Mind-Brush
 ```
 
 **2. Install**

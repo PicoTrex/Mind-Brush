@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://arxiv.org/abs/2511.20415" target="_blank">
+  <a href="" target="_blank">
     <img src="https://img.shields.io/badge/-arXiv-%23b91c1c?style=flat&logo=arxiv&logoColor=white&labelColor=%23b91c1c" alt="arXiv Paper">
   </a>
   <a href="https://github.com/PicoTrex/Mind-Brush" target="_blank">
@@ -29,7 +29,7 @@
 
 ## 📰 新闻
 
-- **[2026-02-01]** 🔥 我们发布了 [论文](https://arxiv.org/abs/2511.20415)、[代码](https://github.com/PicoTrex/Mind-Brush) 和 [数据集](https://huggingface.co/datasets/PicoTrex/Mind-Brush)！
+- **[2026-02-01]** 🔥 我们发布了 [论文](./)、[代码](https://github.com/PicoTrex/Mind-Brush) 和 [数据集](https://huggingface.co/datasets/PicoTrex/Mind-Brush)！
 
 ## 🏆 主要贡献
 
@@ -43,7 +43,7 @@
 
 | 案例 1 | 案例 2 |
 | :---: | :---: |
-| <video src="assets/case1.mp4" width="400" controls></video> | <video src="assets/case2.mp4" width="400" controls></video> |
+| <video src="assets/case_1.mp4" width="400" controls></video> | <video src="assets/case_2.mp4" width="400" controls></video> |
 
 ## 🚀 快速开始
 
