@@ -41,9 +41,9 @@
 
 ## 📽️ 演示回放
 
-| 案例 1 | 案例 2 |
+| Search 示例 | Search & Reason 示例 |
 | :---: | :---: |
-| <video src="assets/case_1.mp4" width="400" controls></video> | <video src="assets/case_2.mp4" width="400" controls></video> |
+| <video src="https://github.com/user-attachments/assets/36d97bad-e94f-4bc2-aae8-5d54451b93bc" controls></video> | <video src="https://github.com/user-attachments/assets/c0639fab-f1d0-4ffd-9120-d43e418f2bd3" controls></video> |
 
 ## 🚀 快速开始
 
