@@ -9,7 +9,7 @@ import os
 import yaml
 from pathlib import Path
 from functools import lru_cache
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 from pydantic import BaseModel, Field
 
 
@@ -75,6 +75,13 @@ class SearchSettings(BaseModel):
         populate_by_name = True
 
 
+class ImageSearchSettings(BaseModel):
+    """Image search API configuration."""
+    provider: str = Field(default="auto", description="Image search provider: auto, google, or serper")
+    priority: List[str] = Field(default=["serper", "google"], description="API priority order for auto mode")
+    num_images: int = Field(default=5, description="Number of images to fetch per query")
+
+
 class TempDirSettings(BaseModel):
     """Temporary directory configuration."""
     default: str = Field(default="./temp")
@@ -99,6 +106,7 @@ class Settings(BaseModel):
     image_gen: ImageGenSettings = Field(default_factory=ImageGenSettings)
     flux: FluxSettings = Field(default_factory=FluxSettings)
     search: SearchSettings = Field(default_factory=SearchSettings)
+    image_search: ImageSearchSettings = Field(default_factory=ImageSearchSettings)
     
     # Infrastructure Settings
     proxy: ProxySettings = Field(default_factory=ProxySettings)
@@ -241,6 +249,17 @@ def _build_settings(raw_config: Dict[str, Any]) -> Settings:
         https_proxy=proxy_config.get("HTTPS_PROXY", raw_config.get("HTTPS_PROXY", "http://127.0.0.1:7890")),
     )
     
+    # Build ImageSearch settings
+    image_search_config = raw_config.get("image_search", {})
+    if isinstance(image_search_config, dict):
+        image_search_settings = ImageSearchSettings(
+            provider=image_search_config.get("provider", "auto"),
+            priority=image_search_config.get("priority", ["serper", "google"]),
+            num_images=image_search_config.get("num_images", 5),
+        )
+    else:
+        image_search_settings = ImageSearchSettings()
+    
     # Build TempDir settings
     temp_config = raw_config.get("temp_dir", {})
     if isinstance(temp_config, dict):
@@ -268,6 +287,7 @@ def _build_settings(raw_config: Dict[str, Any]) -> Settings:
         image_gen=image_gen_settings,
         flux=flux_settings,
         search=search_settings,
+        image_search=image_search_settings,
         proxy=proxy_settings,
         temp_dir=temp_dir_settings,
         mcp_servers=mcp_servers,

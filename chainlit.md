@@ -1,6 +1,6 @@
-# Welcome to MindBrush! 🎨
+# Welcome to Mind-Brush! 🎨
 
-**MindBrush** is an AI-powered image generation agent that combines:
+**Mind-Brush** is an AI-powered image generation agent that combines:
 
 - 🧠 **Intelligent Intent Analysis** - Understands what you want to create
 - 🔍 **Knowledge Retrieval** - Searches for relevant information
@@ -17,7 +17,7 @@
 
 ### Smart Workflow
 
-MindBrush automatically chooses the best workflow for your request:
+Mind-Brush automatically chooses the best workflow for your request:
 
 - Direct generation for simple prompts
 - Knowledge search for factual content
@@ -33,4 +33,4 @@ Watch each step of the AI workflow as it happens!
 2. **Upload** reference images (optional)
 3. **Send** and watch the magic happen! ✨
 
-Enjoy creating with **MindBrush**! 🚀
+Enjoy creating with **Mind-Brush**! 🚀

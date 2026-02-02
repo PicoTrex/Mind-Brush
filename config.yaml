@@ -1,22 +1,31 @@
 # VLM model [required]
-OPENAI_API_KEY: "sk-X9jXfVLVKHEK6y06p6MRJuEHwvqQX240PPrebQikc1fBXeIS"
-OPENAI_BASE_URL: "https://yunwu.ai/v1"
+OPENAI_API_KEY: ""
+OPENAI_BASE_URL: ""
 OPENAI_MODEL_NAME: "gpt-5.1"
 PROVIDER: "openai"
 
 # Image Gen model [required]
-IMAGE_API_KEY: "sk-jYwexkVU6AeQ6oBYFupdDsXFD9yBHptJu61vPbX4sRLA8JEl"
-IMAGE_BASE_URL: "https://yunwu.ai/v1"
+IMAGE_API_KEY: ""
+IMAGE_BASE_URL: ""
 IMAGE_GEN_MODEL_NAME: "qwen-image-plus"
-# IMAGE_EDIT_MODEL_NAME: "qwen-image-edit-plus-2025-12-15"
-IMAGE_EDIT_MODEL_NAME: "qwen-image-edit-2509"
+IMAGE_EDIT_MODEL_NAME: "qwen-image-edit-plus-2025-12-15"
 
-# Google API [required]
-GOOGLE_API_KEY: "AIzaSyDs18HN7Zv0fiGPRs85uKCglWEy1hknHVI"
-GOOGLE_SEARCH_ENGINE_ID: "b59238bad54ef46a0"
+# Google API [required] "https://console.developers.google.com/"
+GOOGLE_API_KEY: ""
+GOOGLE_SEARCH_ENGINE_ID: ""
 
-# SERPER API [required]
-SERPER_API_KEY: "bdf9b167a18e2e9071e4eed39f257aa28d8ad10c"
+# SERPER API [required] (recommended) "https://serper.dev/"
+SERPER_API_KEY: ""
+
+# Image search configuration [optional]
+image_search:
+  # Provider: "auto" (auto-detect), "google", or "serper"
+  provider: "auto"
+  # Priority order when provider is "auto" (uses first available API with valid key)
+  priority: ["serper", "google"]
+  # Number of images to fetch per query
+  num_images: 5
+
 
 # Temporary directory settings [required]
 temp_dir:
@@ -26,6 +35,6 @@ temp_dir:
   text_rag: "./temp/text_rag"
 
 # Proxy settings [optional]
-proxy_on: True
+proxy_on: False
 HTTP_PROXY: "http://127.0.0.1:7890"
 HTTPS_PROXY: "http://127.0.0.1:7890"

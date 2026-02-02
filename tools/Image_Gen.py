@@ -251,8 +251,8 @@ if __name__ == "__main__":
     # result2 = unified_image_generator(
     #     prompt="Transform this into a watercolor painting style",
     #     reference_images=[
-    #         r"E:\github-project\Idea2Image\code\cases\9_Science-and-Logic_1\textgen.png",
-    #         r"E:\github-project\Idea2Image\code\cases\8_MathVerse_11\guided.png",
+    #         r"./cases/9_Science-and-Logic_1/textgen.png",
+    #         r"./cases/8_MathVerse_11/guided.png",
     #     ]
     # )
     # print("Image-guided generation:", result2)

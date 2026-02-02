@@ -1,0 +1,33 @@
+{
+    "welcome": {
+        "title": "欢迎使用 **MindBrush**",
+        "subtitle": "您的 AI 图像生成创意伙伴。",
+        "session_id": "会话 ID",
+        "quick_start": "快速开始指南",
+        "text_to_image": "**文本生图**: 描述您的想法（例如：*'雨中的赛博朋克城市'*）。",
+        "image_to_image": "**图片生图**: 上传参考图片来引导风格。",
+        "multi_modal": "**多模态**: 同时发送文本和图片以实现精确控制。",
+        "start_prompt": "在下方输入提示词开始创作！"
+    },
+    "workflow": {
+        "starting": "启动 **MindBrush** 工作流...",
+        "complete": "所有步骤已完成！",
+        "generation_complete": "生成完成！",
+        "failed": "生成失败",
+        "unexpected_error": "意外错误"
+    },
+    "errors": {
+        "no_session": "会话未初始化，请刷新页面。",
+        "no_input": "请提供文本、图片或两者。"
+    },
+    "completion": {
+        "total_steps": "总步骤数",
+        "total_time": "总耗时",
+        "session": "会话",
+        "final_prompt": "最终提示词"
+    },
+    "step": {
+        "running": "运行中...",
+        "images_displayed": "张图片已显示"
+    }
+}

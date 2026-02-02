@@ -1,0 +1,117 @@
+# Step Configuration
+# ==================
+# Unified configuration for all workflow steps.
+# Controls icons, image visualization, field display styles, and formatting.
+
+# Display style settings
+display:
+  # Font sizes for different heading levels (using markdown)
+  heading_level_1: "###"    # Primary field names
+  heading_level_2: "####"   # Nested field names
+  heading_level_3: "#####"  # Third level fields
+  
+  # Default field display (no special formatting)
+  default_style: "plain"  # plain, code_block, quote_block
+
+# Tool/Step definitions
+tools:
+  intent_analysis:
+    server: "IntentAnalysis"
+    tool_name: "intent_analyzer"
+    display_name: "Intent Analysis"
+    icon: "🧠"
+    show_images: false
+    field_display:
+      intent_category:
+        style: "quote_block"
+      need_process_problem:
+        style: "quote_block"
+    
+  keyword_generation:
+    server: "KeywordGeneration"
+    tool_name: "keyword_generation"
+    display_name: "Keyword Generation"
+    icon: "🔑"
+    show_images: false
+    field_display:
+      text_queries:
+        style: "quote_block"
+      image_queries:
+        style: "quote_block"
+    
+  text_rag:
+    server: "TextRAG"
+    tool_name: "text_search_and_inject"
+    display_name: "Text Search & Knowledge Injection"
+    icon: "📚"
+    show_images: false
+    field_display:
+      prompt:
+        style: "quote_block"
+    
+  image_search:
+    server: "ImageRAG"
+    tool_name: "search_and_download_images_batch"
+    display_name: "Image Search"
+    icon: "🖼️"
+    show_images: true
+    image_fields:
+      - "result"
+    field_display:
+      result:
+        style: "quote_block"
+        show_images: true
+    
+  knowledge_reasoning:
+    server: "KnowledgeReasoning"
+    tool_name: "knowledge_reasoning"
+    display_name: "Knowledge Reasoning"
+    icon: "💡"
+    show_images: false
+    field_display:
+      reasoning_knowledge:
+        style: "quote_block"
+    
+  knowledge_review:
+    server: "KnowledgeReview"
+    tool_name: "knowledge_review"
+    display_name: "Knowledge Review"
+    icon: "✨"
+    show_images: true
+    image_fields:
+      - "reference_image"
+    field_display:
+      final_prompt:
+        style: "quote_block"
+      reasoning_knowledge:
+        style: "quote_block"
+      reference_image:
+        style: "quote_block"
+        show_images: true
+    
+  image_generation:
+    server: "ImageGen"
+    tool_name: "unified_image_generator"
+    display_name: "Image Generation"
+    icon: "🎨"
+    show_images: true
+    image_fields:
+      - "result"
+    field_display:
+      result:
+        style: "quote_block"
+        show_images: true
+
+# Default settings for unknown steps
+defaults:
+  icon: "⚙️"
+  show_images: false
+  field_display: {}
+
+# Status icons for step states
+status_icons:
+  pending: "⏳"
+  running: "🔄"
+  completed: "✅"
+  failed: "❌"
+  skipped: "⏭️"

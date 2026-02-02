@@ -7,10 +7,10 @@ Supports:
 - Text input
 - Image input
 - Text + Image combined input
-- Real-time step-by-step progress display
-- Final image result display
-- Session-based storage with timestamps
-- Custom step icons
+- Real-time step-by-step progress display with live timer
+- Configurable image visualization per field
+- Rich output formatting with field-specific styles
+- Lazy session creation (only when user sends message)
 """
 
 import os
@@ -18,13 +18,16 @@ import json
 import yaml
 import asyncio
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 
 import chainlit as cl
 
 from services.agent_service import MindBrushAgent, StepResult, StepStatus, AgentResult
 from core.config_loader import get_settings
 from core.session_manager import get_session_manager
+from core.formatters import OutputFormatter, format_duration, format_running_time, format_completion_message
+from core.i18n import t, setup_chainlit_md
+
 
 # ==============================================================================
 # Configuration
@@ -33,20 +36,32 @@ from core.session_manager import get_session_manager
 settings = get_settings()
 session_manager = get_session_manager()
 
-# Load step icons configuration
-STEP_ICONS_CONFIG_PATH = Path("./configs/step_icons.yaml")
-STEP_ICONS: Dict[str, str] = {}
+# Setup localized chainlit.md on startup
+setup_chainlit_md()
+
+
+# Load step configuration
+STEP_CONFIG_PATH = Path("./configs/step_config.yaml")
+STEP_CONFIG: Dict[str, Any] = {}
+TOOLS_CONFIG: Dict[str, Any] = {}
 STATUS_ICONS: Dict[str, str] = {}
+DISPLAY_CONFIG: Dict[str, Any] = {}
+DEFAULT_CONFIG: Dict[str, Any] = {"icon": "⚙️", "show_images": False, "field_display": {}}
 
 try:
-    with open(STEP_ICONS_CONFIG_PATH, "r", encoding="utf-8") as f:
-        icons_config = yaml.safe_load(f)
-        STEP_ICONS = icons_config.get("step_icons", {})
-        STATUS_ICONS = icons_config.get("status_icons", {})
+    with open(STEP_CONFIG_PATH, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+        TOOLS_CONFIG = config.get("tools", {})
+        STATUS_ICONS = config.get("status_icons", {})
+        DEFAULT_CONFIG = config.get("defaults", DEFAULT_CONFIG)
+        DISPLAY_CONFIG = config.get("display", {})
+        
+        # Build step config by display_name for easy lookup
+        for tool_id, tool_config in TOOLS_CONFIG.items():
+            display_name = tool_config.get("display_name", tool_id)
+            STEP_CONFIG[display_name] = tool_config
 except Exception as e:
-    print(f"Warning: Could not load step icons config: {e}")
-    # Fallback defaults
-    STEP_ICONS = {"default": "⚙️"}
+    print(f"Warning: Could not load step config: {e}")
     STATUS_ICONS = {
         "pending": "⏳",
         "running": "🔄",
@@ -60,9 +75,15 @@ except Exception as e:
 # Helper Functions
 # ==============================================================================
 
+def get_step_config(step_name: str) -> Dict[str, Any]:
+    """Get configuration for a step."""
+    return STEP_CONFIG.get(step_name, DEFAULT_CONFIG)
+
+
 def get_step_icon(step_name: str) -> str:
     """Get custom icon for a step."""
-    return STEP_ICONS.get(step_name, STEP_ICONS.get("default", "⚙️"))
+    config = get_step_config(step_name)
+    return config.get("icon", DEFAULT_CONFIG.get("icon", "⚙️"))
 
 
 def get_status_icon(status: StepStatus) -> str:
@@ -71,49 +92,45 @@ def get_status_icon(status: StepStatus) -> str:
     return STATUS_ICONS.get(status_name, "❓")
 
 
-def format_step_output(step: StepResult) -> str:
-    """Format step output for display in Chainlit."""
-    if step.status == StepStatus.FAILED:
-        return f"❌ Error: {step.error_message}"
+def get_field_display_config(step_name: str) -> Dict[str, Any]:
+    """Get field display configuration for a step."""
+    config = get_step_config(step_name)
+    return config.get("field_display", {})
+
+
+def get_image_fields(step_name: str) -> List[str]:
+    """Get list of fields that contain images."""
+    config = get_step_config(step_name)
+    return config.get("image_fields", [])
+
+
+def extract_images_from_output(output_data: Dict[str, Any], image_fields: List[str]) -> List[str]:
+    """Extract image paths from output data based on configured fields."""
+    if not output_data or not image_fields:
+        return []
     
-    if step.status == StepStatus.SKIPPED:
-        return "⏭️ Skipped"
+    all_images = []
     
-    output = step.output_data
-    
-    # Format as JSON if it's a dict
-    if isinstance(output, dict):
-        # Remove 'result' wrapper if present
-        if 'result' in output and len(output) == 1:
-            output = output['result']
+    for field in image_fields:
+        data = output_data.get(field, [])
         
-        return f"```json\n{json.dumps(output, indent=2, ensure_ascii=False)}\n```"
+        if isinstance(data, list):
+            for path in data:
+                if isinstance(path, str) and os.path.exists(path):
+                    all_images.append(path)
+        elif isinstance(data, str) and os.path.exists(data):
+            all_images.append(data)
     
-    # Format as list
-    if isinstance(output, list):
-        return f"```json\n{json.dumps(output, indent=2, ensure_ascii=False)}\n```"
-    
-    return str(output)
+    return all_images
 
 
 async def save_uploaded_file(file: cl.File, session_id: str) -> str:
-    """
-    Save uploaded file to session-specific upload directory.
-    
-    Args:
-        file: Chainlit File object
-        session_id: Current session ID
-        
-    Returns:
-        Path to saved file
-    """
+    """Save uploaded file to session-specific upload directory."""
     upload_dir = session_manager.get_upload_dir()
     
-    # Generate unique filename
     filename = f"{file.name}"
     file_path = upload_dir / filename
     
-    # Copy file content
     with open(file.path, "rb") as src:
         with open(file_path, "wb") as dst:
             dst.write(src.read())
@@ -122,22 +139,12 @@ async def save_uploaded_file(file: cl.File, session_id: str) -> str:
 
 
 async def extract_image_from_message(message: cl.Message, session_id: str) -> Optional[str]:
-    """
-    Extract image path from Chainlit message.
-    
-    Args:
-        message: Chainlit Message object
-        session_id: Current session ID
-        
-    Returns:
-        Path to saved image file, or None
-    """
+    """Extract image path from Chainlit message."""
     if not message.elements:
         return None
     
     for element in message.elements:
         if isinstance(element, cl.Image):
-            # Save to session-specific storage
             return await save_uploaded_file(element, session_id)
     
     return None
@@ -149,128 +156,172 @@ async def extract_image_from_message(message: cl.Message, session_id: str) -> Op
 
 @cl.on_chat_start
 async def start():
-    """Initialize chat session with timestamped storage."""
-    # Create new session
-    session_id = session_manager.create_session()
+    """Initialize chat session (lazy - no directories created yet)."""
+    # Only prepare session ID, do NOT create directories
+    session_id = session_manager.prepare_session()
     
     # Store session ID in user session
     cl.user_session.set("session_id", session_id)
+    cl.user_session.set("active_steps", {})
     
     await cl.Message(
         content=(
-            f"## 🎨 Welcome to **MindBrush**\n"
+            f"## 🎨 {t('welcome.title')}\n"
             f"--- \n"
-            f"Your creative companion for AI-powered image generation.\n\n"
-            f"> 🆔 **Session ID**\n"
+            f"{t('welcome.subtitle')}\n\n"
+            f"> 🆔 **{t('welcome.session_id')}**\n"
             f"> `{session_id}`\n\n"
-            f"### 🚀 **Quick Start Guide**\n"
-            f"* **Text-to-Image**: Describe your vision (e.g., *'A cyberpunk city in the rain'*).\n"
-            f"* **Image-to-Image**: Upload a reference photo to guide the style.\n"
-            f"* **Multi-Modal**: Send both text and images for precise control.\n\n"
+            f"### 🚀 **{t('welcome.quick_start')}**\n"
+            f"* {t('welcome.text_to_image')}\n"
+            f"* {t('welcome.image_to_image')}\n"
+            f"* {t('welcome.multi_modal')}\n\n"
             f"--- \n"
-            f"✨ *Type your prompt below to start creating!*"
+            f"✨ *{t('welcome.start_prompt')}*"
         ),
     ).send()
 
 
 @cl.on_message
 async def main(message: cl.Message):
-    """
-    Handle incoming user messages.
-    Orchestrates the complete MindBrush workflow.
-    """
+    """Handle incoming user messages."""
     # Get session ID
     session_id = cl.user_session.get("session_id")
     if not session_id:
-        await cl.Message(content="⚠️ Session not initialized. Please refresh.").send()
+        await cl.Message(content=f"⚠️ {t('errors.no_session')}").send()
         return
     
     # Parse message content
     text_input = message.content.strip()
-    image_input = await extract_image_from_message(message, session_id)
     
-    # Validate input
-    if not text_input and not image_input:
-        await cl.Message(content="⚠️ Please provide text, an image, or both.").send()
+    # Validate input first (before creating any directories)
+    if not text_input and not message.elements:
+        await cl.Message(content=f"⚠️ {t('errors.no_input')}").send()
         return
     
-    # Create step tracking message
-    progress_msg = await cl.Message(content="🚀 Starting MindBrush workflow...").send()
+    # NOW create session directories (lazy creation)
+    session_dir = session_manager.ensure_session_dirs()
     
-    # Initialize agent with session directory
-    session_dir = session_manager.get_session_dir()
-    agent = MindBrushAgent(session_dir=str(session_dir))
+    # Extract image if provided
+    image_input = await extract_image_from_message(message, session_id)
     
-    # Track completed steps for display
-    completed_steps: List[StepResult] = []
+    # Create progress message
+    await cl.Message(content=f"🚀 {t('workflow.starting')}").send()
+    
+    # Track active steps for timer updates
+    active_steps: Dict[str, Any] = {}
+    cl.user_session.set("active_steps", active_steps)
+    
+    # Initialize agent with session
+    agent = MindBrushAgent(
+        session_dir=str(session_dir),
+        session_manager=session_manager
+    )
+    
+    async def on_step_start(step: StepResult):
+        """Callback when a step starts - show step immediately with live timer."""
+        step_icon = get_step_icon(step.step_name)
+        
+        # Create step UI immediately
+        ui_step = cl.Step(
+            name=f"{step_icon} {step.step_name}",
+            type="tool" if "Search" in step.step_name else "llm",
+        )
+        await ui_step.__aenter__()
+        
+        # Store start time
+        start_time = asyncio.get_event_loop().time()
+        
+        # Store for later update
+        active_steps[step.step_name] = {
+            "ui_step": ui_step,
+            "start_time": start_time,
+            "timer_task": None,
+        }
+        
+        # Start timer update task - shows running time on the right
+        async def update_timer():
+            try:
+                while step.step_name in active_steps:
+                    elapsed = asyncio.get_event_loop().time() - start_time
+                    timer_display = format_running_time(elapsed)
+                    ui_step.output = f"🔄 {t('step.running')} **{timer_display}**"
+                    await asyncio.sleep(1)
+            except asyncio.CancelledError:
+                pass
+        
+        timer_task = asyncio.create_task(update_timer())
+        active_steps[step.step_name]["timer_task"] = timer_task
     
     async def on_step_complete(step: StepResult):
-        """Callback for step completion updates."""
-        completed_steps.append(step)
+        """Callback for step completion - update with formatted output."""
+        step_info = active_steps.get(step.step_name)
         
-        # Get custom icon for this step
-        step_icon = get_step_icon(step.step_name)
-        status_icon = get_status_icon(step.status)
-        
-        # Create step display using Chainlit Step
-        async with cl.Step(
-            name=f"{step_icon} {step.step_name}",
-            type="tool" if "Search" in step.step_name or "RAG" in step.step_name else "llm",
-        ) as ui_step:
-            # Show input
-            if step.input_data:
-                input_preview = json.dumps(step.input_data, indent=2, ensure_ascii=False)
-                if len(input_preview) > 500:
-                    input_preview = input_preview[:500] + "..."
-                ui_step.input = f"```json\n{input_preview}\n```"
+        if step_info:
+            # Cancel timer
+            if step_info.get("timer_task"):
+                step_info["timer_task"].cancel()
+                try:
+                    await step_info["timer_task"]
+                except asyncio.CancelledError:
+                    pass
             
-            # Show output
-            ui_step.output = format_step_output(step)
+            ui_step = step_info["ui_step"]
             
-            # Special handling for Image Search - display downloaded images
-            if (step.step_name == "Image Search" and step.status == StepStatus.COMPLETED):
-                image_paths = []
+            # Format output
+            if step.status == StepStatus.FAILED:
+                ui_step.output = f"❌ **Error**\n\n```\n{step.error_message}\n```"
+            elif step.status == StepStatus.SKIPPED:
+                ui_step.output = "⏭️ Skipped"
+            else:
+                # Get field display config for this step
+                field_config = get_field_display_config(step.step_name)
                 
-                # Extract image paths from output
-                if isinstance(step.output_data, dict) and "result" in step.output_data:
-                    image_paths = step.output_data.get("result", [])
-                elif isinstance(step.output_data, list):
-                    image_paths = step.output_data
+                # Format output with configured styles
+                formatter = OutputFormatter(DISPLAY_CONFIG, field_config)
+                formatted_output = formatter.format(step.output_data)
+                ui_step.output = formatted_output
                 
-                # Display images
-                if image_paths:
-                    image_elements = []
-                    for idx, img_path in enumerate(image_paths):
-                        if os.path.exists(img_path):
+                # Check if we should display images
+                image_fields = get_image_fields(step.step_name)
+                if image_fields:
+                    image_paths = extract_images_from_output(step.output_data, image_fields)
+                    
+                    if image_paths:
+                        image_elements = []
+                        for idx, img_path in enumerate(image_paths):
                             image_elements.append(
                                 cl.Image(
                                     path=img_path,
-                                    name=f"Reference {idx + 1}",
+                                    name=f"Image {idx + 1}",
                                     display="inline",
-                                    size="small",
+                                    size="small" if len(image_paths) > 1 else "medium",
                                 )
                             )
-                    
-                    if image_elements:
-                        ui_step.elements = image_elements
-                        ui_step.output += f"\n\n📸 Downloaded {len(image_elements)} reference images"
+                        
+                        if image_elements:
+                            ui_step.elements = image_elements
+                            ui_step.output += f"\n\n📸 {len(image_elements)} {t('step.images_displayed')}"
+                
+                # Add duration
+                ui_step.output += f"\n\n{format_duration(step.duration_ms)}"
             
-            # Add duration info
-            if step.duration_ms > 0:
-                duration_sec = step.duration_ms / 1000
-                ui_step.output += f"\n\n⏱️ Duration: {duration_sec:.2f}s"
+            # Close step
+            await ui_step.__aexit__(None, None, None)
+            
+            # Remove from active
+            del active_steps[step.step_name]
     
     # Run the workflow
     try:
         result = await agent.process(
             text_input=text_input,
             image_input=image_input,
+            on_step_start=on_step_start,
             on_step_complete=on_step_complete,
         )
         
         # Display final result
         if result.success:
-            # Create result message with images
             elements: List[cl.Element] = []
             
             for idx, img_path in enumerate(result.final_images):
@@ -283,41 +334,44 @@ async def main(message: cl.Message):
                         )
                     )
             
-            # Save result metadata
-            results_dir = session_manager.get_results_dir()
-            metadata_path = results_dir / "result_metadata.json"
-            with open(metadata_path, "w", encoding="utf-8") as f:
-                json.dump({
-                    "session_id": session_id,
-                    "text_input": text_input,
-                    "image_input": image_input,
-                    "final_prompt": result.final_prompt,
-                    "final_images": result.final_images,
-                    "steps_count": len(result.steps),
-                }, f, indent=2, ensure_ascii=False)
+            # Calculate total time
+            total_time_ms = sum(s.duration_ms for s in result.steps)
+            
+            # Format completion message with prominent display
+            completion_msg = format_completion_message(
+                session_id=session_manager.session_id,
+                total_steps=len(result.steps),
+                total_time_ms=total_time_ms
+            )
+            
+            # Format final prompt in quote block
+            final_content = (
+                f"{completion_msg}\n\n"
+                f"> **{t('completion.final_prompt')}**\n"
+                f"> \n"
+                f"> {result.final_prompt}"
+            )
             
             await cl.Message(
-                content=f"✨ **Generation Complete!**\n\n"
-                        f"**Final Prompt:**\n```\n{result.final_prompt}\n```\n\n"
-                        f"📁 Results saved to: `{session_manager.get_session_dir()}`",
+                content=final_content,
                 elements=elements if elements else None,
             ).send()
             
         else:
             await cl.Message(
-                content=f"❌ **Generation Failed**\n\n"
-                        f"Error: {result.error_message}",
+                content=f"❌ **{t('workflow.failed')}**\n\n"
+                        f"```\n{result.error_message}\n```",
             ).send()
             
     except Exception as e:
         await cl.Message(
-            content=f"❌ **Unexpected Error**\n\n"
+            content=f"❌ **{t('workflow.unexpected_error')}**\n\n"
                     f"```\n{str(e)}\n```",
         ).send()
 
 
 # ==============================================================================
-# File Upload Handler
+# Settings Handler
 # ==============================================================================
 
 @cl.on_settings_update
@@ -327,9 +381,8 @@ async def setup_agent(settings):
 
 
 # ==============================================================================
-# Entry Point (for development)
+# Entry Point
 # ==============================================================================
 
 if __name__ == "__main__":
-    # For development, run with: chainlit run app.py -w
     pass

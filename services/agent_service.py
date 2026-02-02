@@ -15,7 +15,8 @@ Workflow:
 
 import sys
 import asyncio
-
+import time
+import json
 
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Callable, Awaitable
@@ -27,6 +28,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from core.config_loader import get_settings
+from core.session_manager import SessionManager
 
 
 # ==============================================================================
@@ -63,14 +65,13 @@ class AgentResult:
     error_message: Optional[str] = None
 
 
-# Type alias for step callback
+# Type alias for step callbacks
 StepCallback = Callable[[StepResult], Awaitable[None]]
 
 
 # ==============================================================================
 # MCP Client Wrapper
 # ==============================================================================
-
 
 class MCPToolClient:
     """
@@ -89,7 +90,6 @@ class MCPToolClient:
     async def connect(self) -> None:
         """Establish connection to MCP server."""
         try:
-            # Merge environment variables
             import os
             merged_env = os.environ.copy()
             merged_env.update(self.env)
@@ -100,7 +100,6 @@ class MCPToolClient:
                 env=merged_env,
             )
             
-            # Use AsyncExitStack to manage context managers
             read, write = await self._exit_stack.enter_async_context(stdio_client(server_params))
             self._session = await self._exit_stack.enter_async_context(ClientSession(read, write))
             await self._session.initialize()
@@ -109,22 +108,12 @@ class MCPToolClient:
             raise RuntimeError(f"Failed to connect to MCP server {self.server_name}: {str(e)}")
     
     async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
-        """
-        Call a tool on the MCP server.
-        
-        Args:
-            tool_name: Name of the tool to call
-            arguments: Tool arguments
-            
-        Returns:
-            Tool result
-        """
+        """Call a tool on the MCP server."""
         if not self._session:
             raise RuntimeError(f"Not connected to MCP server: {self.server_name}")
         
         result = await self._session.call_tool(tool_name, arguments)
         
-        # Extract content from result
         if hasattr(result, 'content') and result.content:
             first_content = result.content[0]
             if hasattr(first_content, 'text'):
@@ -133,10 +122,9 @@ class MCPToolClient:
         return result
     
     async def disconnect(self) -> None:
-        """Close connection to MCP server using ExitStack."""
+        """Close connection to MCP server."""
         await self._exit_stack.aclose()
         self._session = None
-
 
 
 # ==============================================================================
@@ -149,19 +137,17 @@ class MindBrushAgent:
     
     Manages the complete workflow from user input to generated image.
     Supports callbacks for real-time step updates.
-    
-    Example:
-        >>> agent = MindBrushAgent()
-        >>> result = await agent.process(
-        ...     text_input="Generate a cyberpunk cityscape",
-        ...     on_step_complete=my_callback
-        ... )
     """
     
-    def __init__(self, session_dir: Optional[str] = None):
+    def __init__(
+        self, 
+        session_dir: Optional[str] = None,
+        session_manager: Optional[SessionManager] = None
+    ):
         self.settings = get_settings()
         self._clients: Dict[str, MCPToolClient] = {}
         self.session_dir = session_dir
+        self.session_manager = session_manager
         
     async def _get_client(self, server_name: str) -> MCPToolClient:
         """Get or create an MCP client for a server."""
@@ -170,12 +156,10 @@ class MindBrushAgent:
             if not server_config:
                 raise ValueError(f"Unknown MCP server: {server_name}")
             
-            # Resolve command: Use current interpreter if config says 'python'
             command = server_config.command
             if command == "python":
                 command = sys.executable
             
-            # Prepare environment variables for session-based storage
             env = {}
             if self.session_dir:
                 env["MINDBRUSH_SESSION_DIR"] = str(self.session_dir)
@@ -188,7 +172,6 @@ class MindBrushAgent:
             )
             await client.connect()
             self._clients[server_name] = client
-
         
         return self._clients[server_name]
     
@@ -202,12 +185,31 @@ class MindBrushAgent:
         client = await self._get_client(server_name)
         return await client.call_tool(tool_name, arguments)
     
+    def _log_step(self, step_result: StepResult) -> None:
+        """Log step result to session logs."""
+        if not self.session_manager:
+            return
+            
+        try:
+            log_content = {
+                "step_name": step_result.step_name,
+                "status": step_result.status.value,
+                "duration_ms": step_result.duration_ms,
+                "input": step_result.input_data,
+                "output": step_result.output_data,
+                "error": step_result.error_message,
+            }
+            self.session_manager.write_step_log(step_result.step_name, log_content)
+        except Exception as e:
+            print(f"Warning: Failed to write step log: {e}")
+    
     async def _run_step(
         self,
         step_name: str,
         server_name: str,
         tool_name: str,
         arguments: Dict[str, Any],
+        on_start: Optional[StepCallback] = None,
         on_complete: Optional[StepCallback] = None
     ) -> StepResult:
         """
@@ -218,12 +220,12 @@ class MindBrushAgent:
             server_name: MCP server to use
             tool_name: Tool to invoke
             arguments: Tool arguments
-            on_complete: Optional callback for step completion
+            on_start: Callback when step starts (for real-time UI)
+            on_complete: Callback for step completion
             
         Returns:
             StepResult with output or error
         """
-        import time
         start_time = time.time()
         
         result = StepResult(
@@ -232,12 +234,15 @@ class MindBrushAgent:
             input_data=arguments,
         )
         
+        # Notify start
+        if on_start:
+            await on_start(result)
+        
         try:
             output = await self._call_tool(server_name, tool_name, arguments)
             
             # Parse output if it's JSON string
             if isinstance(output, str):
-                import json
                 try:
                     output = json.loads(output)
                 except json.JSONDecodeError:
@@ -252,7 +257,10 @@ class MindBrushAgent:
         
         result.duration_ms = (time.time() - start_time) * 1000
         
-        # Invoke callback if provided
+        # Log to session
+        self._log_step(result)
+        
+        # Invoke completion callback
         if on_complete:
             await on_complete(result)
         
@@ -262,6 +270,7 @@ class MindBrushAgent:
         self,
         text_input: str,
         image_input: Optional[str] = None,
+        on_step_start: Optional[StepCallback] = None,
         on_step_complete: Optional[StepCallback] = None
     ) -> AgentResult:
         """
@@ -270,6 +279,7 @@ class MindBrushAgent:
         Args:
             text_input: User's text prompt
             image_input: Optional path to user's input image
+            on_step_start: Callback invoked when each step starts
             on_step_complete: Callback invoked after each step completes
             
         Returns:
@@ -289,6 +299,7 @@ class MindBrushAgent:
                     "user_intent": text_input,
                     "user_image_path": image_input,
                 },
+                on_start=on_step_start,
                 on_complete=on_step_complete,
             )
             steps.append(step1)
@@ -318,6 +329,7 @@ class MindBrushAgent:
                     arguments={
                         "need_process_problem": need_process_problem,
                     },
+                    on_start=on_step_start,
                     on_complete=on_step_complete,
                 )
                 steps.append(step2)
@@ -341,6 +353,7 @@ class MindBrushAgent:
                         "user_intent": text_input,
                         "image_queries": image_queries,
                     },
+                    on_start=on_step_start,
                     on_complete=on_step_complete,
                 )
                 steps.append(step3)
@@ -362,6 +375,7 @@ class MindBrushAgent:
                     arguments={
                         "image_queries": image_queries,
                     },
+                    on_start=on_step_start,
                     on_complete=on_step_complete,
                 )
                 steps.append(step4)
@@ -390,6 +404,7 @@ class MindBrushAgent:
                         "user_image_path": image_input,
                         "downloaded_paths": downloaded_paths,
                     },
+                    on_start=on_step_start,
                     on_complete=on_step_complete,
                 )
                 steps.append(step5)
@@ -411,6 +426,7 @@ class MindBrushAgent:
                     "downloaded_paths": downloaded_paths,
                     "input_image_path": image_input or "",
                 },
+                on_start=on_step_start,
                 on_complete=on_step_complete,
             )
             steps.append(step6)
@@ -433,6 +449,7 @@ class MindBrushAgent:
                     "prompt": final_prompt,
                     "reference_images": reference_images,
                 },
+                on_start=on_step_start,
                 on_complete=on_step_complete,
             )
             steps.append(step7)
@@ -480,22 +497,16 @@ class MindBrushAgent:
 async def run_mindbrush(
     text_input: str,
     image_input: Optional[str] = None,
+    on_step_start: Optional[StepCallback] = None,
     on_step_complete: Optional[StepCallback] = None
 ) -> AgentResult:
     """
     Convenience function to run MindBrush agent.
-    
-    Args:
-        text_input: User's text prompt
-        image_input: Optional path to user's input image
-        on_step_complete: Optional callback for step updates
-        
-    Returns:
-        AgentResult with final images
     """
     agent = MindBrushAgent()
     return await agent.process(
         text_input=text_input,
         image_input=image_input,
+        on_step_start=on_step_start,
         on_step_complete=on_step_complete,
     )

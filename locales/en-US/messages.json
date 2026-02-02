@@ -1,0 +1,33 @@
+{
+    "welcome": {
+        "title": "Welcome to **MindBrush**",
+        "subtitle": "Your creative companion for AI-powered image generation.",
+        "session_id": "Session ID",
+        "quick_start": "Quick Start Guide",
+        "text_to_image": "**Text-to-Image**: Describe your vision (e.g., *'A cyberpunk city in the rain'*).",
+        "image_to_image": "**Image-to-Image**: Upload a reference photo to guide the style.",
+        "multi_modal": "**Multi-Modal**: Send both text and images for precise control.",
+        "start_prompt": "Type your prompt below to start creating!"
+    },
+    "workflow": {
+        "starting": "Starting **MindBrush** workflow...",
+        "complete": "All Steps Completed!",
+        "generation_complete": "Generation Complete!",
+        "failed": "Generation Failed",
+        "unexpected_error": "Unexpected Error"
+    },
+    "errors": {
+        "no_session": "Session not initialized. Please refresh.",
+        "no_input": "Please provide text, an image, or both."
+    },
+    "completion": {
+        "total_steps": "Total Steps",
+        "total_time": "Total Time",
+        "session": "Session",
+        "final_prompt": "Final Prompt"
+    },
+    "step": {
+        "running": "Running...",
+        "images_displayed": "image(s) displayed"
+    }
+}

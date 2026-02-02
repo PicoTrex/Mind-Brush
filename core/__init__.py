@@ -1,22 +1,46 @@
 """
-MindBrush Core Module
-=====================
-This module provides the core infrastructure for the MindBrush agent system.
-
-Components:
-- config_loader: Pydantic-based configuration management
-- mcp_client: MCP protocol client for tool invocation
-- model_provider: Unified LLM interface
+Core Module
+===========
+Core utilities for MindBrush.
 """
 
-from .config_loader import get_settings, Settings
-from .model_provider import ModelProvider
-from .session_manager import SessionManager, get_session_manager
+from core.config_loader import (
+    get_settings,
+    Settings,
+    load_prompt,
+)
+from core.model_provider import ModelProvider
+from core.session_manager import SessionManager, get_session_manager
+from core.formatters import (
+    OutputFormatter,
+    format_output_markdown,
+    format_duration,
+    format_running_time,
+    format_step_header,
+    format_error,
+)
+from core.i18n import (
+    t,
+    get_current_language,
+    setup_chainlit_md,
+    reload_translations,
+)
 
 __all__ = [
     "get_settings",
-    "Settings", 
+    "Settings",
+    "load_prompt",
     "ModelProvider",
     "SessionManager",
     "get_session_manager",
+    "OutputFormatter",
+    "format_output_markdown",
+    "format_duration",
+    "format_running_time",
+    "format_step_header",
+    "format_error",
+    "t",
+    "get_current_language",
+    "setup_chainlit_md",
+    "reload_translations",
 ]

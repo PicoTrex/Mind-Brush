@@ -5,17 +5,18 @@
 <h2>Mind-Brush: Integrating Agentic Cognitive Search and Reasoning into Image Generation</h2>
 
 <p align="center">
+  <b>English</b> | <a href="README_CN.md">中文</a>
+</p>
+
+<p align="center">
   <a href="https://arxiv.org/abs/2511.20415" target="_blank">
     <img src="https://img.shields.io/badge/-arXiv-%23b91c1c?style=flat&logo=arxiv&logoColor=white&labelColor=%23b91c1c" alt="arXiv Paper">
   </a>
-  <a href="https://github.com/LongHZ140516/MajutsuCity" target="_blank">
-    <img src="https://img.shields.io/badge/-Github-%236EB4F9?style=flat&logo=github&logoColor=white&labelColor=%236EB4F9" alt="GitHub Repo">
+  <a href="https://github.com/PicoTrex/Mind-Brush" target="_blank">
+    <img src="https://img.shields.io/badge/-Github-%234aa2a9?style=flat&logo=github&logoColor=white&labelColor=%234aa2a9" alt="GitHub Repo">
   </a>
-  <a href="https://longhz140516.github.io/MajutsuCity/" target="_blank">
-    <img src="https://img.shields.io/badge/-ProjectPage-%23FF7FAE?style=flat&logo=googlechrome&logoColor=white&labelColor=%23FF7FAE" alt="Project Page">
-  </a>
-  <a href="https://huggingface.co/datasets/SereinH/MajutsuDataset" target="_blank">
-    <img src="https://img.shields.io/badge/-Dataset-FFD21E?style=flat&logo=huggingface&logoColor=white&labelColor=FFD21E" alt="Project Page">
+  <a href="https://huggingface.co/datasets/PicoTrex/Mind-Brush" target="_blank">
+    <img src="https://img.shields.io/badge/-Dataset-%23FFD21E?style=flat&logo=huggingface&logoColor=white&labelColor=%23FFD21E" alt="Dataset">
   </a>
 </p>
 
@@ -25,26 +26,52 @@
 
 </div>
 
+
 ## 📰 News
 
-- **[2026.2.1]** 🔥 We have released xxx
+- **[2026-02-01]** 🔥 We have released [Paper](https://arxiv.org/abs/2511.20415), [Code](https://github.com/PicoTrex/Mind-Brush) and [Dataset](https://huggingface.co/datasets/PicoTrex/Mind-Brush)!
 
 ## 🏆 Contributions
 
+- 🧠 **Mind-Brush Framework**: A novel agentic paradigm that unifies **Intent Analysis**, **Multi-modal Search**, and **Knowledge Reasoning** into a seamless **"Think-Research-Create"** workflow for image generation.
+- 📊 **Mind-Bench**: A specialized benchmark designed to evaluate generative models on **dynamic external knowledge** and **complex logical deduction**, exposing the reasoning gaps in current SOTA multimodal models.
+- 🏆 **Superior Performance**:
+  - **15x Boost**: Elevates Qwen-Image baseline accuracy from ***0.02*** to ***0.31*** on Mind-Bench.
+  - **New SOTA**: Outperforms existing baselines on **WISE** (***+25.8%*** WiScore) and **RISEBench** (***+27.3%*** Accuracy).
+
+## 📽️ Demo
+
+| Case 1 | Case 2 |
+| :---: | :---: |
+| <video src="assets/case1.mp4" controls></video> | <video src="assets/case2.mp4" controls></video> |
+
+
 ## 🚀 Quickstart
 
-1. **Clone & Install**
+**1. Clone**
+
 ```bash
-git clone xxx
-cd MindBrsuh
+git clone https://github.com/PicoTrex/Mind-Brush.git
+cd Mind-Brsuh
+```
+
+**2. Install**
+
+```bash
+conda create -n mindbrush python=3.12
+conda activate mindbrush
 pip install -r requirements.txt
 ```
 
-2. **Configuration**
+**3. Configuration**
 
 Fill in the `[required]` fields in `config.yaml` (e.g., API keys, path settings).
 
-3. **Launch**
+> [!NOTE]
+> You can set your language in `.chainlit/config.toml`. In Default, the language is set to `en-US`. You can change it to Chinese by setting `language = "zh-CN"`.
+> [We only support English and Chinese for now. If you want to support other languages, you can add the corresponding language settings in the `locales` folder.]
+
+**4. Launch**
 
 Run the application with the following command:
 

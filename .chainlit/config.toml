@@ -92,7 +92,7 @@ allowed_executables = ["npx", "uvx"]
 
 [UI]
 # Name of the assistant.
-name = "MindBrush Agent"
+name = "Mind-Brush"
 
 # default_theme = "dark"
 
@@ -118,6 +118,9 @@ confirm_new_chat = true
 
 # Chain of Thought (CoT) display mode. Can be "hidden", "tool_call" or "full".
 cot = "full"
+
+# Expand messages by default (steps will be expanded)
+default_expand_messages = true
 
 # Specify a CSS file that can be used to customize the user interface.
 # The CSS file can be served from the public directory or via an external link.
