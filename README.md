@@ -35,7 +35,7 @@
 
 - 🧠 **Mind-Brush Framework**: A novel agentic paradigm that unifies **Intent Analysis**, **Multi-modal Search**, and **Knowledge Reasoning** into a seamless **"Think-Research-Create"** workflow for image generation.
 - 📊 **Mind-Bench**: A specialized benchmark designed to evaluate generative models on **dynamic external knowledge** and **complex logical deduction**, exposing the reasoning gaps in current SOTA multimodal models.
-- 🏆 **Superior Performance**:
+- 🏆 **Superior Performance**: 
   - **15x Boost**: Elevates Qwen-Image baseline accuracy from ***0.02*** to ***0.31*** on Mind-Bench.
   - **New SOTA**: Outperforms existing baselines on **WISE** (***+25.8%*** WiScore) and **RISEBench** (***+27.3%*** Accuracy).
 
