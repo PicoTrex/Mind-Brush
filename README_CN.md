@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="" target="_blank">
+  <a href="https://arxiv.org/abs/2602.01756" target="_blank">
     <img src="https://img.shields.io/badge/-arXiv-%23b91c1c?style=flat&logo=arxiv&logoColor=white&labelColor=%23b91c1c" alt="arXiv Paper">
   </a>
   <a href="https://github.com/PicoTrex/Mind-Brush" target="_blank">
