@@ -29,7 +29,7 @@
 
 ## 📰 News
 
-- **[2026-02-01]** 🔥 We have released [Paper](./), [Code](https://github.com/PicoTrex/Mind-Brush) and [Dataset](https://huggingface.co/datasets/PicoTrex/Mind-Brush)!
+- **[2026-02-02]** 🔥 We have released [Paper](https://arxiv.org/abs/2602.01756), [Code](https://github.com/PicoTrex/Mind-Brush) and [Dataset](https://huggingface.co/datasets/PicoTrex/Mind-Brush)!
 
 ## 🏆 Contributions
 

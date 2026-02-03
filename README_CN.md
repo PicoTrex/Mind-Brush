@@ -29,15 +29,15 @@
 
 ## 📰 新闻
 
-- **[2026-02-01]** 🔥 我们发布了 [论文](./)、[代码](https://github.com/PicoTrex/Mind-Brush) 和 [数据集](https://huggingface.co/datasets/PicoTrex/Mind-Brush)！
+- **[2026-02-02]** 🔥 我们发布了 [论文](https://arxiv.org/abs/2602.01756)、[代码](https://github.com/PicoTrex/Mind-Brush) 和 [数据集](https://huggingface.co/datasets/PicoTrex/Mind-Brush)！
 
 ## 🏆 主要贡献
 
 - 🧠 **Mind-Brush 框架**：一种全新的代理范式，将 **意图分析**、**多模态搜索** 和 **知识推理** 统一为一个无缝的 **“思考-研究-创作”** 图像生成工作流。
 - 📊 **Mind-Bench**：专门设计的基准测试，用于评估生成模型在**动态外部知识**和**复杂逻辑推理**方面的表现，揭示了当前 SOTA 多模态模型的推理差距。
 - 🏆 **卓越性能**：
-  - **15倍提升**：在 Mind-Bench 上将 Qwen-Image 基准准确率从 ***0.02*** 提升至 ***0.31***。
-  - **全新 SOTA**：在 **WISE**（***+25.8%*** WiScore）和 **RISEBench**（***+27.3%*** 准确率）上超越了现有基准。
+  - 在 Mind-Bench 上将 Qwen-Image 基准准确率从 ***0.02*** 提升至 ***0.31***。
+  - 在 **WISE**（***+25.8%*** WiScore）和 **RISEBench**（***+27.3%*** 准确率）上超越了现有基准。
 
 ## 📽️ 演示回放
 
